@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 
 const navItems = [
@@ -14,7 +15,16 @@ export default function Sidebar() {
 
   return (
     <div className="w-64 h-screen bg-gray-100 border-r border-gray-200 p-4">
-      <div className="text-xl font-bold mb-6">ContentSage</div>
+      <div className="flex items-center gap-2 mb-6">
+        <Image
+          src="/contentsage.jpg"
+          alt="ContentSage Logo"
+          width={32}
+          height={32}
+          className="rounded-lg"
+        />
+        <div className="text-xl font-bold">ContentSage</div>
+      </div>
       <nav className="space-y-2">
         {navItems.map((item) => {
           const isActive = pathname === item.path;
