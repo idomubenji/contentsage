@@ -1,5 +1,5 @@
 /** @type {import('next').NextConfig} */
-// Updated Next.js configuration
+// Updated Next.js configuration bruh
 const nextConfig = {
   env: {
     SUPABASE_URL: process.env.SUPABASE_URL,
