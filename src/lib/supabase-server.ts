@@ -15,14 +15,14 @@ export function createClient() {
         set(name: string, value: string, options: any) {
           try {
             cookieStore.set({ name, value, ...options });
-          } catch (_error) {
+          } catch {
             // Handle the error or ignore if running in a read-only context
           }
         },
         remove(name: string, options: any) {
           try {
             cookieStore.delete({ name, ...options });
-          } catch (_error) {
+          } catch {
             // Handle the error or ignore if running in a read-only context
           }
         },

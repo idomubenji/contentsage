@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { SimpleAuthProvider, useSimpleAuth } from '@/lib/simple-auth-context';
 import { supabase } from '@/lib/supabase';
 
@@ -11,7 +11,7 @@ function SimpleTestContent() {
   const [isChecking, setIsChecking] = useState(false);
 
   // Check if the user exists in the database
-  const checkUserInDb = async () => {
+  const checkUserInDb = useCallback(async () => {
     if (!user) return;
     
     setIsChecking(true);
@@ -33,7 +33,7 @@ function SimpleTestContent() {
     } finally {
       setIsChecking(false);
     }
-  };
+  }, [user]);
 
   // Create the user in the database
   const createUser = async () => {

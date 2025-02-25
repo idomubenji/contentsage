@@ -1,6 +1,7 @@
 'use client';
 
-import { useAuth } from '@/lib/auth-context';
+// Removed unused import
+// import { useAuth } from '@/lib/auth-context';
 
 export default function Home() {
   // Remove unused variables
