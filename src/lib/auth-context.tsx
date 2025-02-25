@@ -151,10 +151,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = async () => {
     console.log('AuthProvider: Signing out...');
     try {
-      await supabase.auth.signOut();
-      window.location.href = '/auth/sign-in';
+      // Clear local session data first
+      setUser(null);
+      setSession(null);
+      
+      // Then sign out from Supabase
+      const { error } = await supabase.auth.signOut();
+      
+      if (error) {
+        console.error('Error signing out:', error);
+      }
+      
+      // Force a complete page reload to clear any stale state
+      console.log('Redirecting to sign-in page after sign-out');
+      window.location.replace('/auth/sign-in');
     } catch (error) {
-      console.error('Error signing out:', error);
+      console.error('Error in signOut function:', error);
+      // Even if there's an error, try to redirect
+      window.location.replace('/auth/sign-in');
     }
   };
 

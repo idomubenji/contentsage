@@ -65,13 +65,13 @@ export default function SignUp() {
         {/* Logo */}
         <div className="mb-8 flex flex-col items-center">
           <div className="mb-6 overflow-hidden rounded-3xl shadow-lg">
-            <Image
+            <img
               src="/contentsage.jpg"
               alt="ContentSage Logo"
               width={150}
               height={150}
-              className="object-cover"
-              priority
+              className="object-cover w-[150px] h-[150px]"
+              style={{ display: 'block' }}
             />
           </div>
           <h1 className="text-4xl font-bold text-white text-center mb-2 drop-shadow-lg">

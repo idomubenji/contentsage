@@ -30,12 +30,13 @@ export default function Sidebar() {
   return (
     <div className="w-64 h-screen bg-gray-100 border-r border-gray-200 p-4 flex flex-col dark:bg-gray-800 dark:border-gray-700 transition-colors duration-200">
       <div className="flex items-center gap-2 mb-6">
-        <Image
+        <img
           src="/contentsage.jpg"
           alt="ContentSage Logo"
           width={32}
           height={32}
-          className="rounded-lg"
+          className="rounded-lg w-[32px] h-[32px]"
+          style={{ display: 'block' }}
         />
         <div className="text-xl font-bold dark:text-white">ContentSage</div>
       </div>

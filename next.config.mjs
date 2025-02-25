@@ -14,6 +14,7 @@ const nextConfig = {
         hostname: '**',
       },
     ],
+    unoptimized: true,
   },
   // Disable TypeScript checking during build
   typescript: {
@@ -22,6 +23,29 @@ const nextConfig = {
   // Disable ESLint during build
   eslint: {
     ignoreDuringBuilds: true,
+  },
+  // Remove these unsupported options
+  // optimizeFonts: true,
+  // swcMinify: true,
+  poweredByHeader: false,
+  output: "standalone",
+  experimental: {
+    optimizeCss: process.env.NODE_ENV === 'production',
+  },
+  // Make sure asset prefix is correctly set
+  assetPrefix: process.env.NODE_ENV === 'production' ? undefined : undefined,
+  headers: async () => {
+    return [
+      {
+        source: '/:path*',
+        headers: [
+          {
+            key: 'X-Powered-By',
+            value: 'ContentSage',
+          },
+        ],
+      },
+    ];
   },
 };
 
