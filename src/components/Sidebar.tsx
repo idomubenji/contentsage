@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { LogOut, Sun, Moon } from "lucide-react";
+import { LogOut, Sun, Moon, Shield } from "lucide-react";
 import { useAuth } from "../lib/auth-context";
 import { useTheme } from "../lib/theme-context";
 
@@ -28,7 +28,7 @@ export default function Sidebar() {
   };
 
   return (
-    <div className="w-64 h-screen bg-gray-100 border-r border-gray-200 p-4 flex flex-col dark:bg-gray-800 dark:border-gray-700 transition-colors duration-200">
+    <div className="fixed top-0 left-0 w-64 h-screen bg-gray-100 border-r border-gray-200 p-4 flex flex-col dark:bg-gray-800 dark:border-gray-700 transition-colors duration-200 overflow-y-auto">
       <div className="flex items-center gap-2 mb-6">
         <img
           src="/contentsage.jpg"
@@ -61,6 +61,19 @@ export default function Sidebar() {
       
       {/* Bottom controls */}
       <div className="mt-auto space-y-2">
+        {/* Privacy Settings */}
+        <Link
+          href="/privacy-settings"
+          className={`flex items-center gap-2 px-4 py-2 w-full text-left rounded-md transition-colors ${
+            pathname === "/privacy-settings"
+              ? "bg-gray-200 text-gray-900 font-medium dark:bg-gray-700 dark:text-white"
+              : "text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
+          }`}
+        >
+          <Shield size={18} />
+          <span>Privacy Settings</span>
+        </Link>
+        
         {/* Theme toggle button */}
         <button
           onClick={toggleTheme}

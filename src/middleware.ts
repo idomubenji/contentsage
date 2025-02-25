@@ -80,58 +80,6 @@ export async function middleware(request: NextRequest) {
   });
 
   try {
-    // PRODUCTION WORKAROUND: Bypass all auth checks for main app routes in production
-    if (BYPASS_PROD_AUTH && appRoutes.some(route => pathname.startsWith(route))) {
-      console.log(`[PROD WORKAROUND] Bypassing auth check for app route: ${pathname}`);
-      console.log(`==== MIDDLEWARE END: ${pathname} (ALLOWED - PROD BYPASS) ====\n`);
-      return response;
-    }
-
-    // Check for auth-specific cookies that indicate the user is probably authenticated
-    const hasAuthCookie = request.cookies.has('sb-access-token') || 
-                          request.cookies.has('sb-refresh-token') || 
-                          request.cookies.has('supabase-auth-token');
-    
-    // For debugging, let's also check for any cookie that might be auth-related
-    const allCookies = request.cookies.getAll();
-    const hasAnyCookie = allCookies.length > 0;
-    const hasPossibleAuthCookie = allCookies.some(c => 
-      c.name.includes('auth') || 
-      c.name.includes('token') || 
-      c.name.includes('session')
-    );
-    
-    console.log('Authentication status:');
-    console.log(`- Has specific auth cookie: ${hasAuthCookie}`);
-    console.log(`- Has any cookies: ${hasAnyCookie}`);
-    console.log(`- Has possible auth cookie: ${hasPossibleAuthCookie}`);
-
-    // Allow access to public routes without any checks
-    if (publicRoutes.some(route => pathname.startsWith(route))) {
-      console.log(`Direct access allowed for public route: ${pathname}`);
-      return response;
-    }
-
-    // Always allow access to root without checks
-    if (pathname === '/') {
-      console.log(`Direct access allowed for root path`);
-      return response;
-    }
-
-    // In development mode, bypass auth
-    if (BYPASS_AUTH) {
-      console.log(`Bypassing auth check in development mode for: ${pathname}`);
-      return response;
-    }
-
-    // TEMPORARY FIX FOR PRODUCTION:
-    // If there are any cookies at all in production, let's assume the user might be authenticated
-    // This is a relaxed check to help overcome potential cookie issues in production
-    if (process.env.NODE_ENV === 'production' && hasAnyCookie) {
-      console.log(`[PROD FIX] Found cookies, assuming authenticated: ${pathname}`);
-      return response;
-    }
-
     // Create a Supabase client
     const supabase = createServerClient(
       process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -162,19 +110,29 @@ export async function middleware(request: NextRequest) {
     console.log(`- Session exists: ${!!session}`);
     console.log(`- User ID: ${session?.user?.id || 'none'}`);
 
-    // If any sign of authentication, allow access
-    if (session || hasAuthCookie || hasPossibleAuthCookie) {
-      console.log(`Authentication detected, allowing access to ${pathname}`);
-      console.log(`==== MIDDLEWARE END: ${pathname} (ALLOWED) ====\n`);
-      return response;
+    const isAuthenticated = !!session;
+    const isAuthPath = pathname.startsWith('/auth');
+
+    // Rule 1: Unauthenticated users can only access /auth/* paths
+    if (!isAuthenticated && !isAuthPath) {
+      console.log(`Unauthenticated user attempted to access ${pathname}, redirecting to sign-in`);
+      const redirectUrl = new URL('/auth/sign-in', request.url);
+      redirectUrl.searchParams.set('redirect_to', pathname);
+      console.log(`==== MIDDLEWARE END: ${pathname} (REDIRECTED) ====\n`);
+      return NextResponse.redirect(redirectUrl);
     }
 
-    // If there's no sign of authentication, redirect to sign in
-    console.log(`No authentication detected, redirecting to sign-in for ${pathname}`);
-    const redirectUrl = new URL('/auth/sign-in', request.url);
-    redirectUrl.searchParams.set('redirect_to', pathname);
-    console.log(`==== MIDDLEWARE END: ${pathname} (REDIRECTED) ====\n`);
-    return NextResponse.redirect(redirectUrl);
+    // Rule 2: Authenticated users can only access non-/auth/* paths
+    if (isAuthenticated && isAuthPath) {
+      console.log(`Authenticated user attempted to access ${pathname}, redirecting to home`);
+      console.log(`==== MIDDLEWARE END: ${pathname} (REDIRECTED) ====\n`);
+      return NextResponse.redirect(new URL('/', request.url));
+    }
+
+    // If rules are satisfied, allow the request
+    console.log(`Access allowed for ${isAuthenticated ? 'authenticated' : 'unauthenticated'} user to ${pathname}`);
+    console.log(`==== MIDDLEWARE END: ${pathname} (ALLOWED) ====\n`);
+    return response;
 
   } catch (e) {
     console.error('Middleware error:', e);
