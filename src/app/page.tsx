@@ -3,7 +3,8 @@
 import { useAuth } from '@/lib/auth-context';
 
 export default function Home() {
-  const { user, isLoading } = useAuth();
+  // Remove unused variables
+  // const { user, isLoading } = useAuth();
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen py-2">

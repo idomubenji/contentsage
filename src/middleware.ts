@@ -36,7 +36,7 @@ export async function middleware(request: NextRequest) {
   console.log(`Middleware processing: ${pathname}`);
 
   // Create a response to modify its headers
-  let response = NextResponse.next({
+  const response = NextResponse.next({
     request: {
       headers: request.headers,
     },

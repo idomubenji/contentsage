@@ -71,7 +71,7 @@ function SimpleTestContent() {
     if (user && !isLoading) {
       checkUserInDb();
     }
-  }, [user, isLoading]);
+  }, [user, isLoading, checkUserInDb]);
 
   if (isLoading) {
     return <div className="p-8">Loading...</div>;
