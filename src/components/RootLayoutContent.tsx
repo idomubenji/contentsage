@@ -2,6 +2,7 @@
 
 import { usePathname } from 'next/navigation';
 import Sidebar from './Sidebar';
+import { ThemeProvider } from '@/lib/theme-context';
 
 export function RootLayoutContent({
   children,
@@ -14,17 +15,19 @@ export function RootLayoutContent({
   const isAuthPage = pathname?.startsWith("/auth");
 
   return (
-    <body
-      className={`${fontFamily.variable} antialiased`}
-    >
-      {isAuthPage ? (
-        children
-      ) : (
-        <div className="flex">
-          <Sidebar />
-          <main className="flex-1">{children}</main>
-        </div>
-      )}
-    </body>
+    <ThemeProvider>
+      <body
+        className={`${fontFamily.variable} antialiased`}
+      >
+        {isAuthPage ? (
+          children
+        ) : (
+          <div className="flex">
+            <Sidebar />
+            <main className="flex-1">{children}</main>
+          </div>
+        )}
+      </body>
+    </ThemeProvider>
   );
 } 

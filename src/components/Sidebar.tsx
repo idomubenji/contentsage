@@ -3,8 +3,9 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { LogOut } from "lucide-react";
+import { LogOut, Sun, Moon } from "lucide-react";
 import { useAuth } from "../lib/auth-context";
+import { useTheme } from "../lib/theme-context";
 
 const navItems = [
   { name: "Home", path: "/" },
@@ -15,6 +16,7 @@ const navItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { signOut } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   const handleSignOut = async () => {
     try {
@@ -26,7 +28,7 @@ export default function Sidebar() {
   };
 
   return (
-    <div className="w-64 h-screen bg-gray-100 border-r border-gray-200 p-4 flex flex-col">
+    <div className="w-64 h-screen bg-gray-100 border-r border-gray-200 p-4 flex flex-col dark:bg-gray-800 dark:border-gray-700 transition-colors duration-200">
       <div className="flex items-center gap-2 mb-6">
         <Image
           src="/contentsage.jpg"
@@ -35,7 +37,7 @@ export default function Sidebar() {
           height={32}
           className="rounded-lg"
         />
-        <div className="text-xl font-bold">ContentSage</div>
+        <div className="text-xl font-bold dark:text-white">ContentSage</div>
       </div>
       <nav className="space-y-2">
         {navItems.map((item) => {
@@ -46,8 +48,8 @@ export default function Sidebar() {
               href={item.path}
               className={`block px-4 py-2 rounded-md transition-colors ${
                 isActive
-                  ? "bg-gray-200 text-gray-900 font-medium"
-                  : "text-gray-600 hover:bg-gray-200 hover:text-gray-900"
+                  ? "bg-gray-200 text-gray-900 font-medium dark:bg-gray-700 dark:text-white"
+                  : "text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
               }`}
             >
               {item.name}
@@ -56,11 +58,31 @@ export default function Sidebar() {
         })}
       </nav>
       
-      {/* Sign-out button positioned at the bottom */}
-      <div className="mt-auto">
+      {/* Bottom controls */}
+      <div className="mt-auto space-y-2">
+        {/* Theme toggle button */}
+        <button
+          onClick={toggleTheme}
+          className="flex items-center gap-2 px-4 py-2 w-full text-left rounded-md text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white transition-colors"
+          aria-label={`Switch to ${theme === 'light' ? 'dark' : 'light'} mode`}
+        >
+          {theme === 'light' ? (
+            <>
+              <Moon size={18} />
+              <span>Dark Mode</span>
+            </>
+          ) : (
+            <>
+              <Sun size={18} />
+              <span>Light Mode</span>
+            </>
+          )}
+        </button>
+        
+        {/* Sign-out button */}
         <button
           onClick={handleSignOut}
-          className="flex items-center gap-2 px-4 py-2 w-full text-left rounded-md text-gray-600 hover:bg-gray-200 hover:text-gray-900 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 w-full text-left rounded-md text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white transition-colors"
         >
           <LogOut size={18} />
           <span>Sign Out</span>

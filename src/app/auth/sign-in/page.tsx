@@ -123,27 +123,27 @@ export default function SignIn() {
         </div>
         
         {/* Sign-in form */}
-        <div className="w-full bg-white/90 backdrop-blur-sm rounded-xl shadow-2xl p-8 space-y-6">
-          <h2 className="text-2xl font-bold text-gray-900 text-center">
+        <div className="w-full bg-white/90 backdrop-blur-sm rounded-xl shadow-2xl p-8 space-y-6 dark:bg-gray-800/90 dark:text-white transition-colors duration-200">
+          <h2 className="text-2xl font-bold text-gray-900 text-center dark:text-white">
             Sign in to your account
           </h2>
           
           <form className="space-y-6" onSubmit={handleSignIn}>
             {error && (
-              <div className="rounded-md bg-red-50 p-4">
-                <p className="text-sm text-red-700">{error}</p>
+              <div className="rounded-md bg-red-50 p-4 dark:bg-red-900/30">
+                <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
               </div>
             )}
             
             {debugInfo && process.env.NODE_ENV === 'development' && (
-              <div className="rounded-md bg-blue-50 p-4">
-                <p className="text-xs text-blue-700 font-mono">{debugInfo}</p>
+              <div className="rounded-md bg-blue-50 p-4 dark:bg-blue-900/30">
+                <p className="text-xs text-blue-700 font-mono dark:text-blue-300">{debugInfo}</p>
               </div>
             )}
             
             <div className="space-y-4">
               <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Email address
                 </label>
                 <input
@@ -151,7 +151,7 @@ export default function SignIn() {
                   name="email"
                   type="email"
                   required
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm py-2 px-3 bg-white/80 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm py-2 px-3 bg-white/80 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   placeholder="you@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
@@ -159,7 +159,7 @@ export default function SignIn() {
               </div>
               
               <div>
-                <label htmlFor="password" className="block text-sm font-medium text-gray-700">
+                <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
                   Password
                 </label>
                 <input
@@ -167,7 +167,7 @@ export default function SignIn() {
                   name="password"
                   type="password"
                   required
-                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm py-2 px-3 bg-white/80 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm py-2 px-3 bg-white/80 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
@@ -186,7 +186,7 @@ export default function SignIn() {
             </div>
 
             <div className="text-sm text-center">
-              <Link href="/auth/sign-up" className="font-medium text-indigo-600 hover:text-indigo-500">
+              <Link href="/auth/sign-up" className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
                 Don't have an account? Sign up
               </Link>
             </div>
