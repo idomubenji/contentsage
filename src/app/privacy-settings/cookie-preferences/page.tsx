@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '../../../components/ui/card';
 import { Switch } from '../../../components/ui/switch';
 import { Label } from '../../../components/ui/label';
@@ -18,6 +18,9 @@ type CookieCategory = {
   enabled: boolean;
   cookies: { name: string; purpose: string; duration: string }[];
 };
+
+// The stored value in localStorage/database can be 'all', 'necessary', or a JSON string
+type CookieConsentStoredValue = 'all' | 'necessary' | string;
 
 export default function CookiePreferencesPage() {
   const { user, isLoading } = useAuth();
@@ -70,11 +73,113 @@ export default function CookiePreferencesPage() {
   ]);
   const [saveStatus, setSaveStatus] = useState<{ success: boolean; message: string } | null>(null);
   const [isLoadingPreferences, setIsLoadingPreferences] = useState(true);
+  
+  // Memoize the Supabase client to prevent multiple instances
+  const supabase = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    return createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+    );
+  }, []);
+
+  // Helper function to parse stored consent value into cookie category states
+  const parseStoredConsent = (storedValue: CookieConsentStoredValue): void => {
+    // If stored value is 'all', enable all categories
+    if (storedValue === 'all') {
+      setCookieCategories(prev => 
+        prev.map(category => ({
+          ...category,
+          enabled: true
+        }))
+      );
+      return;
+    }
+    
+    // If stored value is 'necessary', enable only required categories
+    if (storedValue === 'necessary') {
+      setCookieCategories(prev => 
+        prev.map(category => ({
+          ...category,
+          enabled: category.required
+        }))
+      );
+      return;
+    }
+    
+    // Try to parse as JSON for granular consent
+    try {
+      const parsedPreferences = JSON.parse(storedValue);
+      
+      // Check if it has the expected shape
+      if (
+        typeof parsedPreferences === 'object' &&
+        parsedPreferences !== null &&
+        'necessary' in parsedPreferences
+      ) {
+        // Update each category based on the parsed preferences
+        setCookieCategories(prev => 
+          prev.map(category => ({
+            ...category,
+            enabled: category.required || !!parsedPreferences[category.id]
+          }))
+        );
+        return;
+      }
+    } catch (e) {
+      console.error('Error parsing cookie preferences:', e);
+    }
+    
+    // Default fallback: only enable required categories
+    setCookieCategories(prev => 
+      prev.map(category => ({
+        ...category,
+        enabled: category.required
+      }))
+    );
+  };
+
+  // Helper function to serialize cookie categories for storage
+  const serializePreferences = (): string => {
+    // Check if all non-required categories are enabled
+    const allNonRequiredEnabled = cookieCategories
+      .filter(category => !category.required)
+      .every(category => category.enabled);
+      
+    if (allNonRequiredEnabled) {
+      return 'all';
+    }
+    
+    // Check if all non-required categories are disabled
+    const allNonRequiredDisabled = cookieCategories
+      .filter(category => !category.required)
+      .every(category => !category.enabled);
+      
+    if (allNonRequiredDisabled) {
+      return 'necessary';
+    }
+    
+    // Otherwise, create a preferences object for granular control
+    const preferencesObj = cookieCategories.reduce((acc, category) => {
+      acc[category.id] = category.enabled;
+      return acc;
+    }, {} as Record<string, boolean>);
+    
+    return JSON.stringify(preferencesObj);
+  };
 
   // Fetch user preferences from database when component mounts
   useEffect(() => {
+    // Skip if no user, no supabase, or not in browser
+    if (!user || !supabase || typeof window === 'undefined') {
+      setIsLoadingPreferences(false);
+      return;
+    }
+    
+    let isMounted = true;
+    
     const fetchUserPreferences = async () => {
-      if (!user || typeof window === 'undefined') return;
+      if (!isMounted) return;
       
       setIsLoadingPreferences(true);
       
@@ -84,11 +189,6 @@ export default function CookiePreferencesPage() {
         console.log('Stored consent from localStorage:', storedConsent);
         
         // Then try to get from database if user is logged in
-        const supabase = createClient(
-          process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-          process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-        );
-        
         const { data, error } = await supabase
           .from('user_consents')
           .select('*')
@@ -97,20 +197,24 @@ export default function CookiePreferencesPage() {
           .order('consented_at', { ascending: false })
           .limit(1);
           
+        if (!isMounted) return;
+        
         console.log('Database consent record:', data?.[0]);
         
         // If we have data from the database, use that (most recent consent)
         if (data && data.length > 0) {
           const dbConsentValue = data[0].consent_value;
           console.log('Using consent value from database:', dbConsentValue);
-          applyConsentPreferences(dbConsentValue);
+          // Parse the consent value into cookie category states
+          parseStoredConsent(dbConsentValue);
           // Also update localStorage to keep them in sync
           localStorage.setItem('cookieConsent', dbConsentValue);
         } 
         // Otherwise fallback to localStorage if available
         else if (storedConsent) {
           console.log('Using consent value from localStorage:', storedConsent);
-          applyConsentPreferences(storedConsent);
+          // Parse the consent value into cookie category states
+          parseStoredConsent(storedConsent);
         } else {
           console.log('No saved preferences found, using default values');
         }
@@ -118,57 +222,27 @@ export default function CookiePreferencesPage() {
         console.error('Error fetching cookie preferences:', error);
         // Try localStorage as fallback
         const storedConsent = localStorage.getItem('cookieConsent');
-        if (storedConsent) {
+        if (storedConsent && isMounted) {
           console.log('Error occurred, using localStorage fallback:', storedConsent);
-          applyConsentPreferences(storedConsent);
+          // Parse the consent value into cookie category states
+          parseStoredConsent(storedConsent);
         }
       } finally {
-        setIsLoadingPreferences(false);
+        if (isMounted) {
+          setIsLoadingPreferences(false);
+        }
       }
     };
     
     fetchUserPreferences();
-  }, [user]);
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [user, supabase]); // Only depend on user and memoized supabase client
 
   // Apply consent preferences to the cookie categories
-  const applyConsentPreferences = (consentValue: string) => {
-    console.log('Applying consent preferences:', consentValue);
-    
-    if (consentValue === 'all') {
-      setCookieCategories(prev => 
-        prev.map(category => ({
-          ...category,
-          enabled: true
-        }))
-      );
-    } else if (consentValue === 'necessary') {
-      setCookieCategories(prev => 
-        prev.map(category => ({
-          ...category,
-          enabled: category.required
-        }))
-      );
-    }
-  };
-
-  // Once preferences are saved (either from a new save or loading from storage),
-  // make sure that cookie category enables reflect those preferences
-  useEffect(() => {
-    if (!isLoadingPreferences && user) {
-      const allNonRequiredEnabled = cookieCategories
-        .filter(category => !category.required)
-        .every(category => category.enabled);
-        
-      const allNonRequiredDisabled = cookieCategories
-        .filter(category => !category.required)
-        .every(category => !category.enabled);
-        
-      console.log('Current cookie state:', { 
-        allEnabled: allNonRequiredEnabled, 
-        allDisabled: allNonRequiredDisabled 
-      });
-    }
-  }, [cookieCategories, isLoadingPreferences, user]);
+  const applyConsentPreferences = parseStoredConsent;
 
   if (isLoading || isLoadingPreferences) {
     return (
@@ -212,23 +286,20 @@ export default function CookiePreferencesPage() {
   };
 
   const savePreferences = async () => {
-    // Determine which type of consent to save
-    const allNonRequiredEnabled = cookieCategories
-      .filter(category => !category.required)
-      .every(category => category.enabled);
-
-    const consentValue = allNonRequiredEnabled ? 'all' : 'necessary';
+    // Serialize the current cookie category states for storage
+    const consentValue = serializePreferences();
     
     console.log('Saving preferences with consent value:', consentValue);
     
     // Save to localStorage
     localStorage.setItem('cookieConsent', consentValue);
 
-    // Make sure our state reflects what we're saving
-    applyConsentPreferences(consentValue);
-
-    // If user selected "necessary", remove non-essential cookies
-    if (consentValue === 'necessary') {
+    // If necessary-only, remove non-essential cookies
+    const isNecessaryOnly = cookieCategories
+      .filter(category => !category.required)
+      .every(category => !category.enabled);
+      
+    if (isNecessaryOnly) {
       // Get names of all cookies from non-necessary categories that are disabled
       const cookiesToRemove = cookieCategories
         .filter(category => !category.required && !category.enabled)
@@ -240,22 +311,19 @@ export default function CookiePreferencesPage() {
       }
     }
 
-    // Save to database for compliance records
+    // Use the memoized supabase client
     try {
-      const supabase = createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL || '',
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
-      );
-
-      await supabase
-        .from('user_consents')
-        .insert({
-          user_id: user.id,
-          consent_type: 'cookies',
-          consent_value: consentValue,
-          consent_version: '1.0',
-          consented_at: new Date().toISOString()
-        });
+      if (user && supabase) {
+        await supabase
+          .from('user_consents')
+          .insert({
+            user_id: user.id,
+            consent_type: 'cookies',
+            consent_value: consentValue,
+            consent_version: '1.0',
+            consented_at: new Date().toISOString()
+          });
+      }
 
       setSaveStatus({
         success: true,
@@ -277,15 +345,13 @@ export default function CookiePreferencesPage() {
 
   return (
     <div className="container mx-auto p-8 max-w-4xl">
-      {/* Compact notification in bottom right on desktop, top center on mobile */}
+      {/* Compact notification - modified to be more compact */}
       {saveStatus && (
-        <div className="fixed md:bottom-4 md:right-4 top-0 left-0 right-0 md:left-auto p-4 z-50 flex md:justify-end justify-center">
-          <Alert className={`max-w-md flex items-center ${saveStatus.success ? 'bg-green-50 dark:bg-green-900/20 border-green-500' : 'bg-red-50 dark:bg-red-900/20 border-red-500'} shadow-lg py-3 px-4`}>
-            <div>
-              <p className="text-sm font-medium">
-                {saveStatus.success ? 'Success!' : 'Error'} {saveStatus.message}
-              </p>
-            </div>
+        <div className="fixed bottom-4 right-4 z-50 flex justify-end">
+          <Alert className={`max-w-md ${saveStatus.success ? 'bg-green-50 dark:bg-green-900/20 border-green-500' : 'bg-red-50 dark:bg-red-900/20 border-red-500'} shadow-lg py-3 px-4 rounded-md`}>
+            <p className="text-sm font-medium">
+              {saveStatus.success ? 'Success!' : 'Error'} {saveStatus.message}
+            </p>
           </Alert>
         </div>
       )}
