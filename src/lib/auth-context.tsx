@@ -190,4 +190,7 @@ export function useAuth() {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
-} 
+}
+
+// Export an alias for backward compatibility
+export const useAuthContext = useAuth; 
