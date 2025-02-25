@@ -1,15 +1,22 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { startOfMonth, endOfMonth, eachDayOfInterval, format } from 'date-fns';
+import { startOfMonth, endOfMonth, eachDayOfInterval, format, parseISO } from 'date-fns';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/lib/auth-context';
 
 export type CalendarViewType = 'day' | 'week' | 'month' | 'year';
 
+// Update Post interface to match our Supabase schema
 export interface Post {
   id: string;
-  date: Date;
+  url: string;
   title: string;
-  content: string;
+  description: string;
+  posted_date: string;
+  format: string;
+  status: 'POSTED' | 'SCHEDULED' | 'SUGGESTED';
+  platform?: string;
   color?: string;
 }
 
@@ -17,12 +24,15 @@ interface CalendarContextType {
   currentDate: Date;
   view: CalendarViewType;
   posts: Post[];
+  loading: boolean;
+  error: string | null;
   setCurrentDate: (date: Date) => void;
   setView: (view: CalendarViewType) => void;
   addPost: (post: Omit<Post, 'id'>) => void;
   deletePost: (id: string) => void;
   getPostsForDate: (date: Date) => Post[];
   getPostsForMonth: (date: Date) => Post[];
+  refreshPosts: () => Promise<void>;
 }
 
 const CalendarContext = createContext<CalendarContextType | undefined>(undefined);
@@ -39,44 +49,77 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
   const [currentDate, setCurrentDate] = useState<Date>(new Date());
   const [view, setView] = useState<CalendarViewType>('month');
   const [posts, setPosts] = useState<Post[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [error, setError] = useState<string | null>(null);
+  const { user } = useAuth();
 
-  // Sample posts for demonstration
-  useEffect(() => {
-    const demoData: Post[] = [
-      {
-        id: '1',
-        date: new Date(),
-        title: 'Today\'s Post',
-        content: 'This is a sample post for today',
-        color: '#4f46e5' // indigo
-      },
-      {
-        id: '2',
-        date: new Date(new Date().setDate(new Date().getDate() + 2)),
-        title: 'Upcoming Post',
-        content: 'This is a sample post for the near future',
-        color: '#10b981' // emerald
+  // Fetch posts from Supabase
+  const fetchPosts = async () => {
+    if (!user) {
+      setLoading(false);
+      setError("Please sign in to view your content");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Fetch posts for the current user
+      const { data, error: fetchError } = await supabase
+        .from('posts')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('posted_date', { ascending: false });
+
+      if (fetchError) {
+        throw new Error(fetchError.message);
       }
-    ];
-    setPosts(demoData);
-  }, []);
+
+      // Assign colors based on post status
+      const postsWithColors = data?.map(post => ({
+        ...post,
+        color: post.status === 'POSTED' 
+          ? '#10b981' // green for posted
+          : post.status === 'SCHEDULED' 
+            ? '#4f46e5' // indigo for scheduled
+            : '#f59e0b' // amber for suggested
+      })) || [];
+      
+      setPosts(postsWithColors);
+    } catch (err: any) {
+      console.error('Error fetching posts for calendar:', err);
+      setError(err.message || 'Failed to fetch posts');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch posts on initial load and when user changes
+  useEffect(() => {
+    fetchPosts();
+  }, [user]);
 
   const addPost = (post: Omit<Post, 'id'>) => {
-    const newPost = {
-      ...post,
-      id: Math.random().toString(36).substring(2, 9)
-    };
-    setPosts([...posts, newPost]);
+    // For new posts created in the calendar, we'd handle that separately
+    // This would involve inserting into Supabase
+    console.log('Adding post would insert to Supabase:', post);
   };
 
   const deletePost = (id: string) => {
-    setPosts(posts.filter(post => post.id !== id));
+    // This would involve deleting from Supabase
+    console.log('Deleting post would remove from Supabase:', id);
   };
 
   const getPostsForDate = (date: Date) => {
-    return posts.filter(post => 
-      format(post.date, 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')
-    );
+    const dateString = format(date, 'yyyy-MM-dd');
+    return posts.filter(post => {
+      // Handle both string dates and Date objects
+      const postDate = post.posted_date 
+        ? format(new Date(post.posted_date), 'yyyy-MM-dd') 
+        : '';
+      return postDate === dateString;
+    });
   };
 
   const getPostsForMonth = (date: Date) => {
@@ -84,7 +127,9 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
     const monthEnd = endOfMonth(date);
     
     return posts.filter(post => {
-      const postDate = new Date(post.date);
+      if (!post.posted_date) return false;
+      
+      const postDate = new Date(post.posted_date);
       return postDate >= monthStart && postDate <= monthEnd;
     });
   };
@@ -95,12 +140,15 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
         currentDate,
         view,
         posts,
+        loading,
+        error,
         setCurrentDate,
         setView,
         addPost,
         deletePost,
         getPostsForDate,
         getPostsForMonth,
+        refreshPosts: fetchPosts
       }}
     >
       {children}
