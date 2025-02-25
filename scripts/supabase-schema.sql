@@ -168,11 +168,23 @@ CREATE POLICY "Users can view their memberships" ON user_organizations
   FOR SELECT
   USING (user_id = auth.uid());
 
--- Users can manage memberships if they are admins (future enhancement)
-CREATE POLICY "Admins can manage memberships" ON user_organizations
+-- Replace the recursive policy with a simpler one
+-- Users with admin role can manage their own organization memberships
+DROP POLICY IF EXISTS "Admins can manage memberships" ON user_organizations;
+CREATE POLICY "Admins can manage organization memberships" ON user_organizations
   FOR ALL
-  USING (
-    organization_id IN (
-      SELECT organization_id FROM user_organizations WHERE user_id = auth.uid() AND role = 'admin'
-    )
-  ); 
+  USING (user_id = auth.uid() AND role = 'admin');
+
+-- Create RLS policies for posts
+ALTER TABLE posts ENABLE ROW LEVEL SECURITY;
+
+-- Users can view and update their own posts
+CREATE POLICY "Users can manage their own posts" ON posts
+  FOR ALL
+  USING (user_id = auth.uid());
+
+-- Grant necessary privileges on posts and other tables
+GRANT ALL ON posts TO postgres;
+GRANT ALL ON posts TO anon;
+GRANT ALL ON posts TO authenticated;
+GRANT ALL ON posts TO service_role; 
