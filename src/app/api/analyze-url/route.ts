@@ -290,6 +290,9 @@ function extractInfoFromHtml(html: string, url: string) {
   // New flag to track if a social post contains a video
   let hasVideo = false;
   
+  // New flag to track if content contains infographics
+  let hasInfographic = false;
+  
   // Enhanced format detection logic
   // First check for social media posts based on platform
   if (
@@ -324,6 +327,8 @@ function extractInfoFromHtml(html: string, url: string) {
       hasVideo = true;
       console.log('Detected video content in social post');
     }
+    
+    // We'll check for infographics after socialContent is defined later in the code
   }
   // Then check for video content
   else if (
@@ -356,18 +361,26 @@ function extractInfoFromHtml(html: string, url: string) {
   } 
   // Check for infographic content
   else if (
-    document.querySelectorAll('.infographic, [class*="infographic"]').length > 0 ||
+    document.querySelectorAll('.infographic, [class*="infographic"], img[alt*="infographic" i]').length > 0 ||
     url.includes('infographic') ||
     title.toLowerCase().includes('infographic') ||
+    // Look for data visualization elements
+    document.querySelectorAll('.data-viz, [class*="dataviz"], [class*="chart"], [class*="graph"], .visualization').length > 0 ||
     // Check for single prominent image with dimensions indicating infographic (tall/narrow)
     document.querySelectorAll('img[width][height]').length > 0 && Array.from(document.querySelectorAll('img[width][height]')).some(img => {
       const w = parseInt(img.getAttribute('width') || '0');
       const h = parseInt(img.getAttribute('height') || '0');
       return w > 0 && h > 0 && h > w * 1.5; // Height is significantly larger than width
     }) ||
-    platform === 'Pinterest' // Pinterest often contains infographics
+    // Check for SVG graphs
+    document.querySelectorAll('svg').length > 0 ||
+    // Pinterest often contains infographics
+    platform === 'Pinterest' ||
+    // Check meta tags
+    document.querySelector('meta[property*="image"][content*="infographic"]') !== null
   ) {
     format = 'infographic';
+    hasInfographic = true; // Always true for infographic format
   } 
   // Check for gallery or slideshow
   else if (
@@ -607,6 +620,32 @@ function extractInfoFromHtml(html: string, url: string) {
       console.error(`Error extracting social content for ${platform}:`, error);
     }
     
+    // Now check for infographics in social posts after we have socialContent
+    if (
+      // Look for image with infographic in class name or alt text
+      document.querySelectorAll('.infographic, [class*="infographic"], img[alt*="infographic" i]').length > 0 ||
+      // Look for data visualization elements
+      document.querySelectorAll('.data-viz, [class*="dataviz"], [class*="chart"], [class*="graph"], .visualization').length > 0 ||
+      // Look for SVG elements (common in infographics)
+      document.querySelectorAll('svg[width][height]').length > 0 && Array.from(document.querySelectorAll('svg[width][height]')).some(svg => {
+        const w = parseInt(svg.getAttribute('width') || '0');
+        const h = parseInt(svg.getAttribute('height') || '0');
+        return w > 100 && h > 100; // Meaningful size for a visualization
+      }) ||
+      // Check for Pinterest content
+      platform === 'Pinterest' ||
+      // Check post content for infographic indicators
+      (socialContent && (
+        socialContent.toLowerCase().includes('infographic') ||
+        socialContent.toLowerCase().includes('data visualization') ||
+        socialContent.toLowerCase().includes('chart') ||
+        socialContent.toLowerCase().includes('graph')
+      ))
+    ) {
+      hasInfographic = true;
+      console.log('Detected infographic content in social post');
+    }
+    
     // If we successfully extracted specific social content, use it instead
     if (socialContent.trim()) {
       return {
@@ -616,7 +655,8 @@ function extractInfoFromHtml(html: string, url: string) {
         platform,
         content: socialContent.trim(),
         needsAiTitle,
-        hasVideo
+        hasVideo,
+        hasInfographic
       };
     }
   }
@@ -628,7 +668,8 @@ function extractInfoFromHtml(html: string, url: string) {
     platform,
     content: truncatedContent,
     needsAiTitle,
-    hasVideo
+    hasVideo,
+    hasInfographic
   };
 }
 
@@ -759,12 +800,13 @@ export async function POST(request: Request) {
     
     // Extract information
     const extractedInfo = extractInfoFromHtml(htmlContent, url);
-    const { title: extractedTitle, postedDate, format, platform, content, needsAiTitle, hasVideo } = extractedInfo;
+    const { title: extractedTitle, postedDate, format, platform, content, needsAiTitle, hasVideo, hasInfographic } = extractedInfo;
     
     console.log('Detected format:', format);
     console.log('Detected platform:', platform);
     console.log('Needs AI title:', needsAiTitle);
     console.log('Has video:', hasVideo);
+    console.log('Has infographic:', hasInfographic);
     console.log('Post date before database insertion:', postedDate);
     
     // Generate title for social posts if needed
@@ -790,7 +832,8 @@ export async function POST(request: Request) {
       user_id: userId,
       // Only include organization_id if it was provided
       ...(organizationId && { organization_id: organizationId }),
-      has_video: hasVideo || false // Store the hasVideo flag in the database
+      has_video: hasVideo || false, // Store the hasVideo flag in the database
+      has_infographic: hasInfographic || false // Store the hasInfographic flag in the database
     };
     
     console.log('Final post data before database insertion:');
@@ -799,6 +842,7 @@ export async function POST(request: Request) {
     console.log('Format:', postData.format);
     console.log('Platform:', postData.platform);
     console.log('Has video:', postData.has_video);
+    console.log('Has infographic:', postData.has_infographic);
     
     // Check if we should replace existing post
     if (replace) {
