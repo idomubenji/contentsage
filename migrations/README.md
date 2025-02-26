@@ -32,6 +32,16 @@ This directory contains SQL migrations to implement GDPR and CCPA compliance fea
    - Inserts default encryption keys for testing
    - **WARNING:** Replace these keys in production!
 
+26. **26_add_has_podcast_field.sql**
+   - Adds a `has_podcast` boolean field to the posts table
+   - Creates an index for efficient querying
+   - Adds documentation explaining the field's purpose
+
+27. **27_add_organization_info_field.sql**
+   - Adds an `info` JSONb field to the organizations table for storing analytical information
+   - Creates a GIN index for efficient querying of the JSONb content
+   - Stores data about industry classification, descriptions from posts, strategy insights, and tone analysis
+
 ## How to Apply Migrations
 
 1. Log in to your Supabase project
@@ -119,6 +129,39 @@ INSERT INTO data_deletion_requests (
   'ANONYMIZE', 
   'User requested account deletion via support ticket #12345'
 );
+```
+
+### Organization Info Field
+
+Store and retrieve organization analytical information with:
+
+```sql
+-- Add or update organization info
+UPDATE organizations 
+SET info = jsonb_set(
+  COALESCE(info, '{}'::jsonb),
+  '{industry}',
+  '"Technology"'
+)
+WHERE id = 'org-uuid';
+
+-- Add multiple fields at once
+UPDATE organizations 
+SET info = info || 
+  '{
+    "description": "A leading provider of cloud computing solutions...",
+    "strategy": "Focuses on enterprise clients with emphasis on security...",
+    "tone": "Professional, technical, and authoritative"
+  }'::jsonb
+WHERE id = 'org-uuid';
+
+-- Query organizations by industry
+SELECT * FROM organizations 
+WHERE info->>'industry' = 'Technology';
+
+-- Find organizations with specific keywords in description
+SELECT * FROM organizations 
+WHERE info->>'description' ILIKE '%cloud%';
 ```
 
 ## Maintenance Procedures

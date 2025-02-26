@@ -24,6 +24,23 @@ type Organization = {
   id: string;
   name: string;
   role: string;
+  info?: {
+    industry?: string;
+    description?: string;
+    strategy?: string;
+    tone?: string;
+    lastAnalyzed?: string;
+  } | null;
+};
+
+// Add a type for post data
+type Post = {
+  id: string;
+  url: string;
+  title: string;
+  description: string;
+  posted_date: string;
+  format: string;
 };
 
 export default function OrganizationsPage() {
@@ -36,6 +53,10 @@ export default function OrganizationsPage() {
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [joinRequestsToApprove, setJoinRequestsToApprove] = useState<any[]>([]);
   const [error, setError] = useState("");
+  // Add states for organization analysis
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
+  const [orgDetailsOpen, setOrgDetailsOpen] = useState<string | null>(null);
 
   // Remove the Supabase client initialization
   // const supabase = createClient(
@@ -96,6 +117,7 @@ export default function OrganizationsPage() {
           } else {
             // Now fetch the organization details in a separate query
             const orgIds = userOrgs.map(org => org.organization_id);
+            console.log('Organization IDs from user_organizations:', orgIds);
             
             const { data: orgsData, error: orgsDataError } = await supabase
               .from('organizations')
@@ -106,6 +128,8 @@ export default function OrganizationsPage() {
               console.error('Organizations: Error fetching organization details', orgsDataError);
               throw orgsDataError;
             }
+            
+            console.log('Organizations data from database:', orgsData);
             
             // Combine the two datasets
             const transformedOrgs = userOrgs.map(userOrg => {
@@ -408,6 +432,121 @@ export default function OrganizationsPage() {
     setError("");
   };
 
+  // Add function to analyze organization posts
+  const analyzeOrganization = async (orgId: string) => {
+    if (!user) return;
+    
+    try {
+      setIsAnalyzing(true);
+      setSelectedOrgId(orgId); // Make sure we're setting the selected org ID
+      setError("");
+      console.log(`Starting analysis for organization ${orgId} (type: ${typeof orgId})`);
+      
+      // Verify the organization exists in our local state first
+      const organization = myOrganizations.find(org => org.id === orgId);
+      if (!organization) {
+        console.error(`Organization with ID ${orgId} not found in local state`);
+        setError(`Organization not found in your list. Please refresh the page.`);
+        setIsAnalyzing(false);
+        setSelectedOrgId(null);
+        return;
+      }
+      
+      console.log(`Analyzing organization: ${organization.name} (${organization.id})`);
+      
+      // Step 1: Fetch all posts for this organization
+      const { data: posts, error: postsError } = await supabase
+        .from('posts')
+        .select('id, url, title, description, posted_date, format')
+        .eq('organization_id', orgId)
+        .is('deleted_at', null)
+        .order('posted_date', { ascending: false });
+      
+      if (postsError) {
+        console.error("Error fetching organization posts:", postsError);
+        throw new Error("Failed to fetch organization posts: " + postsError.message);
+      }
+      
+      if (!posts || posts.length === 0) {
+        setError("No posts found for this organization. Analysis requires at least one post.");
+        setIsAnalyzing(false);
+        setSelectedOrgId(null); // Reset selected org ID
+        return;
+      }
+      
+      console.log(`Found ${posts.length} posts for analysis`);
+      
+      // Step 2: Prepare data for OpenAI analysis
+      const postData = posts.map(post => ({
+        title: post.title || 'Untitled',
+        description: post.description || '',
+        date: post.posted_date,
+        url: post.url,
+        format: post.format
+      }));
+      
+      // Step 3: Call API endpoint to perform analysis with OpenAI
+      console.log("Calling analyze-organization API with organization:", {
+        id: orgId,
+        name: organization.name
+      });
+      
+      const response = await fetch('/api/analyze-organization', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          organizationId: orgId,
+          organizationName: organization.name, // Send the name as well
+          posts: postData
+        }),
+      });
+      
+      const result = await response.json();
+      
+      if (!response.ok) {
+        console.error("API error response:", result);
+        throw new Error(result.error || result.details || `API returned ${response.status}: ${response.statusText}`);
+      }
+      
+      console.log("Analysis result:", result);
+      
+      // Step 4: Update the organization's info in our local state
+      setMyOrganizations(prev => prev.map(org => {
+        if (org.id === orgId) {
+          return {
+            ...org,
+            info: {
+              ...result.analysis,
+              lastAnalyzed: new Date().toISOString()
+            }
+          };
+        }
+        return org;
+      }));
+      
+      // Show success message
+      setError(`Analysis completed successfully for ${organization.name}`);
+      
+    } catch (error) {
+      console.error('Error analyzing organization:', error);
+      setError(error instanceof Error ? error.message : 'Failed to analyze organization');
+    } finally {
+      setIsAnalyzing(false);
+      setSelectedOrgId(null); // Reset selected org ID
+    }
+  };
+  
+  // Function to view organization details
+  const toggleOrgDetails = (orgId: string) => {
+    if (orgDetailsOpen === orgId) {
+      setOrgDetailsOpen(null);
+    } else {
+      setOrgDetailsOpen(orgId);
+    }
+  };
+
   return (
     <div className="container mx-auto p-6">
       <div className="flex justify-between items-center mb-6">
@@ -436,14 +575,89 @@ export default function OrganizationsPage() {
         ) : myOrganizations.length > 0 ? (
           <div className="divide-y divide-gray-200 dark:divide-gray-700">
             {myOrganizations.map((org) => (
-              <div key={org.id} className="py-4 flex justify-between items-center">
-                <div>
-                  <h3 className="text-lg font-medium dark:text-white">{org.name}</h3>
-                  <p className="text-sm text-gray-500 dark:text-gray-400">Role: {org.role}</p>
+              <div key={org.id} className="py-4">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <h3 className="text-lg font-medium dark:text-white">{org.name}</h3>
+                    <p className="text-sm text-gray-500 dark:text-gray-400">Role: {org.role}</p>
+                    {org.info?.lastAnalyzed && (
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Last analyzed: {new Date(org.info.lastAnalyzed).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                  <div className="flex space-x-2">
+                    <button 
+                      onClick={() => toggleOrgDetails(org.id)}
+                      className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                    >
+                      {orgDetailsOpen === org.id ? 'Hide Details' : 'View Details'}
+                    </button>
+                    <button 
+                      onClick={() => analyzeOrganization(org.id)}
+                      disabled={isAnalyzing && selectedOrgId === org.id}
+                      className={`px-3 py-1 rounded-md text-sm ${
+                        isAnalyzing && selectedOrgId === org.id
+                          ? 'bg-gray-400 cursor-not-allowed'
+                          : 'bg-green-600 hover:bg-green-700 text-white'
+                      }`}
+                    >
+                      {isAnalyzing && selectedOrgId === org.id ? (
+                        <span className="flex items-center">
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          Analyzing...
+                        </span>
+                      ) : (
+                        'Analyze Posts'
+                      )}
+                    </button>
+                  </div>
                 </div>
-                <button className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
-                  View Details
-                </button>
+                
+                {/* Organization details section */}
+                {orgDetailsOpen === org.id && (
+                  <div className="mt-4 bg-gray-50 dark:bg-gray-700 p-4 rounded-md">
+                    {org.info ? (
+                      <div className="space-y-3">
+                        {org.info.industry && (
+                          <div>
+                            <h4 className="font-semibold dark:text-white">Industry</h4>
+                            <p className="text-gray-700 dark:text-gray-300">{org.info.industry}</p>
+                          </div>
+                        )}
+                        
+                        {org.info.description && (
+                          <div>
+                            <h4 className="font-semibold dark:text-white">Description</h4>
+                            <p className="text-gray-700 dark:text-gray-300">{org.info.description}</p>
+                          </div>
+                        )}
+                        
+                        {org.info.strategy && (
+                          <div>
+                            <h4 className="font-semibold dark:text-white">Strategy</h4>
+                            <p className="text-gray-700 dark:text-gray-300">{org.info.strategy}</p>
+                          </div>
+                        )}
+                        
+                        {org.info.tone && (
+                          <div>
+                            <h4 className="font-semibold dark:text-white">Tone</h4>
+                            <p className="text-gray-700 dark:text-gray-300">{org.info.tone}</p>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-center py-4">
+                        <p className="text-gray-600 dark:text-gray-400">No analysis data available yet.</p>
+                        <p className="text-gray-600 dark:text-gray-400 text-sm mt-1">Click "Analyze Posts" to generate insights about this organization.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             ))}
           </div>
