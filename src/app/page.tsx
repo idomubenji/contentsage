@@ -525,6 +525,14 @@ export default function Home() {
                     placeholder="https://example.com/blog-post"
                     value={url}
                     onChange={(e) => setUrl(e.target.value)}
+                    onKeyDown={(e) => {
+                      // Detect Command+Enter (Mac) or Ctrl+Enter (Windows/Linux)
+                      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
+                        if (url.trim() && !isLoading && !isProcessingCSV) {
+                          handleSubmit(e);
+                        }
+                      }
+                    }}
                     className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                     disabled={isLoading || isProcessingCSV}
                   />

@@ -18,6 +18,7 @@ export interface Post {
   status: 'POSTED' | 'SCHEDULED' | 'SUGGESTED';
   platform?: string;
   color?: string;
+  hasVideo?: boolean;
 }
 
 interface CalendarContextType {
