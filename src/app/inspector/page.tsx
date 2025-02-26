@@ -63,17 +63,22 @@ function MultiSelectFilter({
 
   return (
     <div>
-      <p className="font-medium text-xs mb-1.5">{label}</p>
+      <p className="font-medium text-xs mb-1.5 dark:text-gray-300">{label}</p>
       <div className="flex flex-wrap gap-1">
         {options.map((option) => {
           const isSelected = selectedValues?.includes(option) || false;
-          const colorClass = isSelected ? (colorMap && colorMap[option]) || 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700';
+          const defaultColorClass = isSelected 
+            ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200'
+            : 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300';
+          const colorClass = isSelected && colorMap && colorMap[option] 
+            ? colorMap[option] 
+            : defaultColorClass;
           
           return (
             <button
               key={option}
               onClick={() => toggleValue(option)}
-              className={`${colorClass} border text-xs px-2 py-0.5 rounded-full flex items-center whitespace-nowrap`}
+              className={`${colorClass} border dark:border-gray-600 text-xs px-2 py-0.5 rounded-full flex items-center whitespace-nowrap`}
             >
               {option}
               {isSelected && (
@@ -110,12 +115,12 @@ function PaginationControls({
   onDeleteSelected?: () => void
 }) {
   return (
-    <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 sm:px-6 my-4 rounded-md">
+    <div className="flex items-center justify-between border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 px-4 py-3 sm:px-6 my-4 rounded-md">
       {/* Mobile view */}
       <div className="flex flex-1 justify-between sm:hidden min-h-[40px]">
         {selectedItems.length > 0 ? (
           <div className="flex items-center justify-between w-full">
-            <span className="text-sm text-gray-700">
+            <span className="text-sm text-gray-700 dark:text-gray-300">
               {selectedItems.length} selected
             </span>
             <button
@@ -130,10 +135,10 @@ function PaginationControls({
             <button
               onClick={() => onPageChange(currentPage - 1)}
               disabled={currentPage === 1}
-              className={`relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium ${
+              className={`relative inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium ${
                 currentPage === 1 
-                  ? 'text-gray-300 cursor-not-allowed' 
-                  : 'text-gray-700 hover:bg-gray-50'
+                  ? 'border-gray-300 dark:border-gray-600 text-gray-300 dark:text-gray-600 cursor-not-allowed' 
+                  : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
               }`}
             >
               Previous
@@ -141,10 +146,10 @@ function PaginationControls({
             <button
               onClick={() => onPageChange(currentPage + 1)}
               disabled={currentPage === totalPages || totalPages === 0}
-              className={`relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium ${
+              className={`relative ml-3 inline-flex items-center rounded-md border px-4 py-2 text-sm font-medium ${
                 currentPage === totalPages || totalPages === 0
-                  ? 'text-gray-300 cursor-not-allowed' 
-                  : 'text-gray-700 hover:bg-gray-50'
+                  ? 'border-gray-300 dark:border-gray-600 text-gray-300 dark:text-gray-600 cursor-not-allowed' 
+                  : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-600'
               }`}
             >
               Next
@@ -158,7 +163,7 @@ function PaginationControls({
         <div className="min-h-[24px] flex items-center">
           {selectedItems.length > 0 ? (
             <div className="flex items-center space-x-4">
-              <span className="text-sm text-gray-700 font-medium">
+              <span className="text-sm text-gray-700 dark:text-gray-300 font-medium">
                 {selectedItems.length} item{selectedItems.length > 1 ? 's' : ''} selected
               </span>
               <button
@@ -169,7 +174,7 @@ function PaginationControls({
               </button>
             </div>
           ) : (
-            <p className="text-sm text-gray-700">
+            <p className="text-sm text-gray-700 dark:text-gray-300">
               {totalItems > 0 ? (
                 <>
                   Showing <span className="font-medium">{Math.min((currentPage - 1) * itemsPerPage + 1, totalItems)}</span> to{' '}
@@ -190,8 +195,8 @@ function PaginationControls({
                 disabled={currentPage === 1}
                 className={`relative inline-flex items-center rounded-l-md px-2 py-2 text-sm ${
                   currentPage === 1 
-                    ? 'text-gray-300 cursor-not-allowed' 
-                    : 'text-gray-400 hover:bg-gray-50'
+                    ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' 
+                    : 'text-gray-400 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600'
                 }`}
               >
                 <span className="sr-only">Previous</span>
@@ -221,7 +226,7 @@ function PaginationControls({
                     className={`relative inline-flex items-center px-4 py-2 text-sm font-semibold ${
                       currentPage === pageNum 
                         ? 'z-10 bg-blue-600 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600' 
-                        : 'text-gray-900 ring-1 ring-inset ring-gray-300 hover:bg-gray-50 focus:outline-offset-0'
+                        : 'text-gray-900 dark:text-white ring-1 ring-inset ring-gray-300 dark:ring-gray-600 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-offset-0'
                     }`}
                   >
                     {pageNum}
@@ -234,8 +239,8 @@ function PaginationControls({
                 disabled={currentPage === totalPages}
                 className={`relative inline-flex items-center rounded-r-md px-2 py-2 text-sm ${
                   currentPage === totalPages 
-                    ? 'text-gray-300 cursor-not-allowed' 
-                    : 'text-gray-400 hover:bg-gray-50'
+                    ? 'text-gray-300 dark:text-gray-600 cursor-not-allowed' 
+                    : 'text-gray-400 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-600'
                 }`}
               >
                 <span className="sr-only">Next</span>
@@ -278,18 +283,18 @@ function FilterPanel({
   
   // Status color map for the chips
   const statusColorMap: Record<string, string> = {
-    'posted': 'bg-green-50 text-green-700 border-green-200',
-    'scheduled': 'bg-blue-50 text-blue-700 border-blue-200',
-    'suggested': 'bg-amber-50 text-amber-700 border-amber-200'
+    'posted': 'bg-green-50 text-green-700 border-green-200 dark:bg-green-900 dark:text-green-200 dark:border-green-800',
+    'scheduled': 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-900 dark:text-blue-200 dark:border-blue-800',
+    'suggested': 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-900 dark:text-amber-200 dark:border-amber-800'
   };
   
   return (
-    <div className="mb-6 bg-white p-5 rounded-md shadow-sm">
+    <div className="mb-6 bg-white dark:bg-gray-800 p-5 rounded-md shadow-sm">
       <div className="flex justify-between items-center mb-5">
-        <h2 className="text-lg font-medium">
+        <h2 className="text-lg font-medium dark:text-white">
           Filter Content
           {activeFilterCount > 0 && (
-            <span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded-full">
+            <span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 rounded-full">
               {activeFilterCount} active
             </span>
           )}
@@ -297,7 +302,7 @@ function FilterPanel({
         {activeFilterCount > 0 && (
           <button
             onClick={onClearFilters}
-            className="text-sm text-blue-600 hover:text-blue-800"
+            className="text-sm text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
           >
             Clear all filters
           </button>
@@ -332,7 +337,7 @@ function FilterPanel({
 
         {/* Date range filter */}
         <div>
-          <p className="font-medium text-xs mb-1.5">Date Range</p>
+          <p className="font-medium text-xs mb-1.5 dark:text-gray-300">Date Range</p>
           <div className="flex space-x-1.5">
             <input
               type="date"
@@ -341,7 +346,7 @@ function FilterPanel({
                 ...filters.dateRange, 
                 startDate: e.target.value || null 
               })}
-              className="w-full px-2 py-0.5 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-2 py-0.5 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
               placeholder="From"
             />
             <input
@@ -351,7 +356,7 @@ function FilterPanel({
                 ...filters.dateRange, 
                 endDate: e.target.value || null 
               })}
-              className="w-full px-2 py-0.5 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              className="w-full px-2 py-0.5 text-xs border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
               placeholder="To"
             />
           </div>
@@ -912,8 +917,8 @@ export default function Inspector() {
 
   return (
     <div className="p-8">
-      <h1 className="text-3xl font-bold mb-6">Content Inspector</h1>
-      <p className="text-gray-600 mb-6">
+      <h1 className="text-3xl font-bold mb-6 dark:text-white">Content Inspector</h1>
+      <p className="text-gray-600 dark:text-gray-400 mb-6">
         View and manage all your analyzed content in one place.
       </p>
 
@@ -922,7 +927,7 @@ export default function Inspector() {
           <div className="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
         </div>
       ) : error ? (
-        <div className="bg-red-100 text-red-800 p-4 rounded-md">
+        <div className="bg-red-100 dark:bg-red-900 text-red-800 dark:text-red-200 p-4 rounded-md">
           <h3 className="font-bold mb-2">Error Loading Content</h3>
           <p>{error}</p>
           <p className="mt-2 text-sm">
@@ -930,9 +935,9 @@ export default function Inspector() {
           </p>
         </div>
       ) : posts.length === 0 ? (
-        <div className="bg-gray-100 p-8 rounded-md text-center">
-          <p className="text-gray-700 mb-4">No content has been analyzed yet.</p>
-          <p className="text-gray-600">
+        <div className="bg-gray-100 dark:bg-gray-800 p-8 rounded-md text-center">
+          <p className="text-gray-700 dark:text-gray-300 mb-4">No content has been analyzed yet.</p>
+          <p className="text-gray-600 dark:text-gray-400">
             Go to the home page and paste a URL to analyze your first piece of content.
           </p>
         </div>
@@ -949,10 +954,10 @@ export default function Inspector() {
           />
           
           {filteredPosts.length === 0 ? (
-            <div className="bg-gray-100 p-8 rounded-md text-center">
-              <p className="text-gray-700 mb-4">No content matches your filter criteria.</p>
-              <p className="text-gray-600">
-                Try adjusting your filters or <button onClick={handleClearFilters} className="text-blue-600 hover:underline">clear all filters</button> to see more results.
+            <div className="bg-gray-100 dark:bg-gray-800 p-8 rounded-md text-center">
+              <p className="text-gray-700 dark:text-gray-300 mb-4">No content matches your filter criteria.</p>
+              <p className="text-gray-600 dark:text-gray-400">
+                Try adjusting your filters or <button onClick={handleClearFilters} className="text-blue-600 dark:text-blue-400 hover:underline">clear all filters</button> to see more results.
               </p>
             </div>
           ) : (
@@ -1004,7 +1009,7 @@ export default function Inspector() {
                         key={post.id}
                         ref={el => { rowRefs.current[index] = el; }}
                         className={`hover:bg-gray-50 dark:hover:bg-gray-700/30 ${
-                          isHighlighted ? 'bg-blue-100 border-blue-400 rounded-md' : ''
+                          isHighlighted ? 'bg-blue-100 dark:bg-blue-900/50 border-blue-400 dark:border-blue-600 rounded-md' : ''
                         }`}
                         onClick={(e) => {
                           // Update focused row
@@ -1114,10 +1119,10 @@ export default function Inspector() {
               
               {/* Delete confirmation modal */}
               {isDeleteModalOpen && (
-                <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-                  <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-                    <h3 className="text-lg font-medium mb-4">Confirm Deletion</h3>
-                    <p className="mb-6">
+                <div className="fixed inset-0 bg-gray-600 bg-opacity-50 dark:bg-black dark:bg-opacity-70 flex items-center justify-center z-50">
+                  <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-md w-full">
+                    <h3 className="text-lg font-medium mb-4 dark:text-white">Confirm Deletion</h3>
+                    <p className="mb-6 dark:text-gray-300">
                       Are you sure you want to delete {selectedPosts.length} selected item{selectedPosts.length > 1 ? 's' : ''}? 
                       This action cannot be undone.
                     </p>
@@ -1125,7 +1130,7 @@ export default function Inspector() {
                       <button
                         onClick={() => setIsDeleteModalOpen(false)}
                         disabled={isDeleting}
-                        className={`px-4 py-2 border border-gray-300 rounded-md text-gray-700 ${isDeleting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}
+                        className={`px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 ${isDeleting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}`}
                       >
                         Cancel
                       </button>
@@ -1155,13 +1160,13 @@ export default function Inspector() {
               
               {/* Edit modal */}
               {isEditModalOpen && editingPost && (
-                <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-                  <div className="bg-white p-6 rounded-lg shadow-xl max-w-2xl w-full">
-                    <h3 className="text-lg font-medium mb-4">Edit Content</h3>
+                <div className="fixed inset-0 bg-gray-600 bg-opacity-50 dark:bg-black dark:bg-opacity-70 flex items-center justify-center z-50">
+                  <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-2xl w-full">
+                    <h3 className="text-lg font-medium mb-4 dark:text-white">Edit Content</h3>
                     
                     <div className="space-y-4">
                       <div>
-                        <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                           Title
                         </label>
                         <input
@@ -1170,12 +1175,12 @@ export default function Inspector() {
                           name="title"
                           value={editingPost.title}
                           onChange={handleInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                         />
                       </div>
                       
                       <div>
-                        <label htmlFor="url" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="url" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                           URL
                         </label>
                         <input
@@ -1184,12 +1189,12 @@ export default function Inspector() {
                           name="url"
                           value={editingPost.url}
                           onChange={handleInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                         />
                       </div>
                       
                       <div>
-                        <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                           Description
                         </label>
                         <textarea
@@ -1198,13 +1203,13 @@ export default function Inspector() {
                           rows={3}
                           value={editingPost.description}
                           onChange={handleInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                         />
                       </div>
                       
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                          <label htmlFor="format" className="block text-sm font-medium text-gray-700 mb-1">
+                          <label htmlFor="format" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Format
                           </label>
                           <select
@@ -1212,7 +1217,7 @@ export default function Inspector() {
                             name="format"
                             value={editingPost.format}
                             onChange={handleInputChange}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                           >
                             <option value="article">Article</option>
                             <option value="video">Video</option>
@@ -1223,7 +1228,7 @@ export default function Inspector() {
                         </div>
                         
                         <div>
-                          <label htmlFor="platform" className="block text-sm font-medium text-gray-700 mb-1">
+                          <label htmlFor="platform" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                             Platform
                           </label>
                           <select
@@ -1231,7 +1236,7 @@ export default function Inspector() {
                             name="platform"
                             value={editingPost.platform}
                             onChange={handleInputChange}
-                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                           >
                             <option value="website">Website</option>
                             <option value="linkedin">LinkedIn</option>
@@ -1244,7 +1249,7 @@ export default function Inspector() {
                       </div>
                       
                       <div>
-                        <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
+                        <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                           Status
                         </label>
                         <select
@@ -1252,7 +1257,7 @@ export default function Inspector() {
                           name="status"
                           value={editingPost.status}
                           onChange={handleInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
                         >
                           <option value="POSTED">Posted</option>
                           <option value="SCHEDULED">Scheduled</option>
@@ -1268,7 +1273,7 @@ export default function Inspector() {
                           setEditingPost(null);
                         }}
                         disabled={isSaving}
-                        className={`px-4 py-2 border border-gray-300 rounded-md text-gray-700 ${isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}
+                        className={`px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md text-gray-700 dark:text-gray-300 ${isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50 dark:hover:bg-gray-700'}`}
                       >
                         Cancel
                       </button>

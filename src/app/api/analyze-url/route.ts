@@ -293,6 +293,9 @@ function extractInfoFromHtml(html: string, url: string) {
   // New flag to track if content contains infographics
   let hasInfographic = false;
   
+  // New flag to track if content contains or is a podcast
+  let hasPodcast = false;
+  
   // Enhanced format detection logic
   // First check for social media posts based on platform
   if (
@@ -328,6 +331,27 @@ function extractInfoFromHtml(html: string, url: string) {
       console.log('Detected video content in social post');
     }
     
+    // Check if this social post contains podcast content
+    if (
+      // Check for audio elements
+      document.querySelectorAll('audio').length > 0 ||
+      // Check for podcast embeds
+      document.querySelectorAll('iframe[src*="spotify.com/embed/episode"], iframe[src*="anchor.fm"], iframe[src*="podcasts.apple.com"]').length > 0 ||
+      // Check post URL
+      url.includes('podcast') || 
+      url.includes('episode') ||
+      // Check common podcast platform domains
+      hostname.includes('anchor.fm') ||
+      hostname.includes('spotify.com/episode') ||
+      hostname.includes('podcasts.apple.com') ||
+      hostname.includes('soundcloud.com') ||
+      // Check for podcast players
+      document.querySelector('.podcast-player') !== null
+    ) {
+      hasPodcast = true;
+      console.log('Detected podcast content in social post');
+    }
+    
     // We'll check for infographics after socialContent is defined later in the code
   }
   // Then check for video content
@@ -358,6 +382,7 @@ function extractInfoFromHtml(html: string, url: string) {
     title.toLowerCase().includes('episode')
   ) {
     format = 'podcast';
+    hasPodcast = true; // Always true for podcast format
   } 
   // Check for infographic content
   else if (
@@ -392,7 +417,7 @@ function extractInfoFromHtml(html: string, url: string) {
   else if (
     url.toLowerCase().endsWith('.pdf') || 
     url.toLowerCase().includes('/pdf/') ||
-    url.toLowerCase().includes('viewdoc')
+    url.includes('viewdoc')
   ) {
     format = 'pdf';
   }
@@ -646,6 +671,22 @@ function extractInfoFromHtml(html: string, url: string) {
       console.log('Detected infographic content in social post');
     }
     
+    // Check for podcast mentions in social media post content
+    if (!hasPodcast && socialContent) {
+      if (
+        socialContent.toLowerCase().includes('podcast') ||
+        socialContent.toLowerCase().includes('episode') ||
+        socialContent.toLowerCase().includes('listen to') ||
+        socialContent.toLowerCase().includes('new episode') ||
+        socialContent.toLowerCase().includes('spotify.com/episode') ||
+        socialContent.toLowerCase().includes('apple.co/podcast') ||
+        socialContent.toLowerCase().includes('anchor.fm')
+      ) {
+        hasPodcast = true;
+        console.log('Detected podcast mention in social post content');
+      }
+    }
+    
     // If we successfully extracted specific social content, use it instead
     if (socialContent.trim()) {
       return {
@@ -656,7 +697,8 @@ function extractInfoFromHtml(html: string, url: string) {
         content: socialContent.trim(),
         needsAiTitle,
         hasVideo,
-        hasInfographic
+        hasInfographic,
+        hasPodcast
       };
     }
   }
@@ -669,7 +711,8 @@ function extractInfoFromHtml(html: string, url: string) {
     content: truncatedContent,
     needsAiTitle,
     hasVideo,
-    hasInfographic
+    hasInfographic,
+    hasPodcast
   };
 }
 
@@ -800,13 +843,14 @@ export async function POST(request: Request) {
     
     // Extract information
     const extractedInfo = extractInfoFromHtml(htmlContent, url);
-    const { title: extractedTitle, postedDate, format, platform, content, needsAiTitle, hasVideo, hasInfographic } = extractedInfo;
+    const { title: extractedTitle, postedDate, format, platform, content, needsAiTitle, hasVideo, hasInfographic, hasPodcast } = extractedInfo;
     
     console.log('Detected format:', format);
     console.log('Detected platform:', platform);
     console.log('Needs AI title:', needsAiTitle);
     console.log('Has video:', hasVideo);
     console.log('Has infographic:', hasInfographic);
+    console.log('Has podcast:', hasPodcast);
     console.log('Post date before database insertion:', postedDate);
     
     // Generate title for social posts if needed
@@ -833,7 +877,8 @@ export async function POST(request: Request) {
       // Only include organization_id if it was provided
       ...(organizationId && { organization_id: organizationId }),
       has_video: hasVideo || false, // Store the hasVideo flag in the database
-      has_infographic: hasInfographic || false // Store the hasInfographic flag in the database
+      has_infographic: hasInfographic || false, // Store the hasInfographic flag in the database
+      has_podcast: hasPodcast || false // Store the hasPodcast flag in the database
     };
     
     console.log('Final post data before database insertion:');
@@ -843,6 +888,7 @@ export async function POST(request: Request) {
     console.log('Platform:', postData.platform);
     console.log('Has video:', postData.has_video);
     console.log('Has infographic:', postData.has_infographic);
+    console.log('Has podcast:', postData.has_podcast);
     
     // Check if we should replace existing post
     if (replace) {

@@ -20,6 +20,7 @@ export interface Post {
   color?: string;
   hasVideo?: boolean;
   hasInfographic?: boolean;
+  hasPodcast?: boolean;
 }
 
 interface CalendarContextType {
