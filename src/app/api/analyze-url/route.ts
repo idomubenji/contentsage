@@ -160,7 +160,7 @@ async function generateDescription(title: string, content: string) {
 
 export async function POST(request: Request) {
   try {
-    const { url, userId } = await request.json();
+    const { url, userId, organizationId } = await request.json();
     
     if (!url) {
       return NextResponse.json({ error: 'URL is required' }, { status: 400 });
@@ -179,21 +179,24 @@ export async function POST(request: Request) {
     // Generate description using OpenAI
     const description = await generateDescription(title, content);
     
+    // Create post entry in database with optional organization_id
+    const postData = {
+      url,
+      title,
+      description,
+      posted_date: postedDate,
+      format,
+      status: 'POSTED',
+      platform,
+      user_id: userId,
+      // Only include organization_id if it was provided
+      ...(organizationId && { organization_id: organizationId })
+    };
+    
     // Create post entry in database
     const { data, error } = await supabaseAdmin
       .from('posts')
-      .insert([
-        {
-          url,
-          title,
-          description,
-          posted_date: postedDate,
-          format,
-          status: 'POSTED',
-          platform,
-          user_id: userId
-        }
-      ])
+      .insert([postData])
       .select();
     
     if (error) {
