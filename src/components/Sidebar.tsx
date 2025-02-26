@@ -11,6 +11,7 @@ const navItems = [
   { name: "Home", path: "/" },
   { name: "Inspector", path: "/inspector" },
   { name: "Calendar", path: "/calendar" },
+  { name: "Organizations", path: "/organizations" },
 ];
 
 export default function Sidebar() {

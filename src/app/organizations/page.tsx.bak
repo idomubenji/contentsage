@@ -1,0 +1,356 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { useAuth } from "../../lib/auth-context";
+import { createClient } from "@supabase/supabase-js";
+import { syncUserToDatabase } from "../../lib/user-utils";
+
+export default function OrganizationsPage() {
+  const { user } = useAuth();
+  const [isLoading, setIsLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [organizationName, setOrganizationName] = useState("");
+  const [searchResults, setSearchResults] = useState<any[]>([]);
+  const [myOrganizations, setMyOrganizations] = useState<any[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<any[]>([]);
+  const [joinRequestsToApprove, setJoinRequestsToApprove] = useState<any[]>([]);
+  const [error, setError] = useState("");
+  const [userSyncRetried, setUserSyncRetried] = useState(false);
+
+  // Initialize Supabase client
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL || "",
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ""
+  );
+
+  // Fetch user's organizations and pending requests
+  useEffect(() => {
+    if (!user) return;
+    
+    const fetchOrganizations = async () => {
+      setIsLoading(true);
+      try {
+        // Attempt to ensure user is synchronized to the database
+        if (!userSyncRetried) {
+          try {
+            console.log("Organizations: Ensuring user is synchronized to database...");
+            await syncUserToDatabase();
+          } catch (syncError) {
+            console.warn("Organizations: User sync warning (continuing anyway):", syncError);
+            // We'll continue anyway as the sync function does
+          } finally {
+            setUserSyncRetried(true);
+          }
+        }
+
+        // Fetch organizations the user belongs to
+        const { data: orgs, error: orgsError } = await supabase
+          .from('user_organizations')
+          .select(`
+            organization_id,
+            role,
+            organizations:organization_id(id, name)
+          `)
+          .eq('user_id', user.id);
+
+        if (orgsError) {
+          // Check if this is a permissions error (could indicate the user isn't in the users table)
+          if (orgsError.code === '42501' || orgsError.message?.includes('permission')) {
+            console.error('Organizations: Possible permissions issue - user may not be properly synced');
+            throw new Error('You may not have the correct permissions. Please try signing out and back in.');
+          }
+          throw orgsError;
+        }
+
+        // Handle case where orgs is null or empty (new user with no organizations)
+        if (!orgs || orgs.length === 0) {
+          console.log('Organizations: User has no organizations');
+          setMyOrganizations([]);
+        } else {
+          setMyOrganizations(orgs.map(item => ({
+            ...item.organizations,
+            role: item.role
+          })));
+        }
+
+        // Fetch pending join requests (could be stored in a separate table in the future)
+        // This is a placeholder for now
+        setPendingRequests([]);
+        
+        // Fetch join requests waiting for approval (for admins)
+        // This is a placeholder for now
+        setJoinRequestsToApprove([]);
+      } catch (error) {
+        console.error('Organizations: Error fetching organizations:', error);
+        setError(error instanceof Error ? error.message : 'Failed to load organizations');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchOrganizations();
+  }, [user, userSyncRetried]);
+
+  const searchOrganization = async () => {
+    if (!organizationName.trim()) {
+      return;
+    }
+    
+    try {
+      setError("");
+      const { data, error } = await supabase
+        .from('organizations')
+        .select('*')
+        .ilike('name', `%${organizationName}%`);
+      
+      if (error) throw error;
+      
+      // Filter out organizations the user already belongs to
+      const filteredResults = data.filter(org => 
+        !myOrganizations.some(myOrg => myOrg.id === org.id)
+      );
+      
+      setSearchResults(filteredResults);
+    } catch (error) {
+      console.error('Error searching organizations:', error);
+      setError('Failed to search organizations');
+    }
+  };
+
+  const handleCreateOrganization = async () => {
+    if (!organizationName.trim() || !user) {
+      setError("Organization name cannot be empty");
+      return;
+    }
+    
+    try {
+      setError("");
+      // Create new organization
+      const { data: newOrg, error: createError } = await supabase
+        .from('organizations')
+        .insert([{ name: organizationName }])
+        .select()
+        .single();
+      
+      if (createError) throw createError;
+      
+      // Add user to the organization as admin
+      const { error: joinError } = await supabase
+        .from('user_organizations')
+        .insert([{ 
+          user_id: user.id, 
+          organization_id: newOrg.id, 
+          role: 'admin'
+        }]);
+      
+      if (joinError) throw joinError;
+      
+      // Update local state
+      setMyOrganizations([...myOrganizations, {...newOrg, role: 'admin'}]);
+      setIsModalOpen(false);
+      setOrganizationName("");
+      setSearchResults([]);
+    } catch (error) {
+      console.error('Error creating organization:', error);
+      setError('Failed to create organization');
+    }
+  };
+
+  const handleRequestJoin = async (orgId: string) => {
+    if (!user) return;
+    
+    try {
+      setError("");
+      // In a real implementation, this would create a pending request in a separate table
+      // For now, this is a placeholder
+      console.log(`Request to join organization ${orgId}`);
+      
+      // Add to pending requests in UI
+      const org = searchResults.find(o => o.id === orgId);
+      setPendingRequests([...pendingRequests, org]);
+      
+      // Remove from search results
+      setSearchResults(searchResults.filter(o => o.id !== orgId));
+    } catch (error) {
+      console.error('Error requesting to join:', error);
+      setError('Failed to submit join request');
+    }
+  };
+
+  // Function to open the modal
+  const openModal = () => {
+    console.log("Opening modal");
+    setIsModalOpen(true);
+  };
+
+  // Function to close the modal
+  const closeModal = () => {
+    console.log("Closing modal");
+    setIsModalOpen(false);
+    setOrganizationName("");
+    setSearchResults([]);
+    setError("");
+  };
+
+  return (
+    <div className="container mx-auto p-6">
+      {/* Debug information - can be removed later */}
+      <div className="hidden">
+        Modal is: {isModalOpen ? 'OPEN' : 'CLOSED'}
+      </div>
+      
+      {/* Header with Add Organization button */}
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold dark:text-white">My Organizations</h1>
+        <button 
+          onClick={openModal}
+          className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+        >
+          Add Organization
+        </button>
+      </div>
+      
+      {error && (
+        <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
+          {error}
+        </div>
+      )}
+      
+      {/* Organizations the user belongs to */}
+      <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
+        <h2 className="text-xl font-semibold mb-4 dark:text-white">My Organizations</h2>
+        
+        {isLoading ? (
+          <div className="flex justify-center my-6">
+            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-blue-500"></div>
+          </div>
+        ) : myOrganizations.length > 0 ? (
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            {myOrganizations.map((org) => (
+              <div key={org.id} className="py-4 flex justify-between items-center">
+                <div>
+                  <h3 className="text-lg font-medium dark:text-white">{org.name}</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Role: {org.role}</p>
+                </div>
+                <button className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300">
+                  View Details
+                </button>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="text-gray-600 dark:text-gray-300">No organizations found.</p>
+        )}
+      </div>
+      
+      {/* Pending Join Requests */}
+      {pendingRequests.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
+          <h2 className="text-xl font-semibold mb-4 dark:text-white">Pending Join Requests</h2>
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            {pendingRequests.map((org) => (
+              <div key={org.id} className="py-4 flex justify-between items-center">
+                <div>
+                  <h3 className="text-lg font-medium dark:text-white">{org.name}</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Status: Pending</p>
+                </div>
+                <button className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300">
+                  Cancel Request
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      {/* Join Requests to Approve (for admins) */}
+      {joinRequestsToApprove.length > 0 && (
+        <div className="bg-white dark:bg-gray-800 shadow-md rounded-lg p-6 mb-6">
+          <h2 className="text-xl font-semibold mb-4 dark:text-white">Join Requests to Approve</h2>
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            {joinRequestsToApprove.map((request) => (
+              <div key={request.id} className="py-4 flex justify-between items-center">
+                <div>
+                  <h3 className="text-lg font-medium dark:text-white">{request.user_name}</h3>
+                  <p className="text-sm text-gray-500 dark:text-gray-400">Organization: {request.organization_name}</p>
+                </div>
+                <div className="space-x-2">
+                  <button className="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded-md text-sm">
+                    Approve
+                  </button>
+                  <button className="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded-md text-sm">
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+      
+      {/* Modal for adding/joining organization */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md w-full">
+            <h2 className="text-xl font-semibold mb-4 dark:text-white">Add Organization</h2>
+            
+            <div className="mb-4">
+              <label className="block text-gray-700 dark:text-gray-300 mb-2">Organization Name</label>
+              <input
+                type="text"
+                value={organizationName}
+                onChange={(e) => setOrganizationName(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-700 dark:text-white"
+                placeholder="Enter organization name"
+              />
+            </div>
+            
+            <div className="flex justify-between mb-4">
+              <button
+                onClick={searchOrganization}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+              >
+                Search
+              </button>
+              <button
+                onClick={handleCreateOrganization}
+                className="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium"
+              >
+                Create New
+              </button>
+            </div>
+            
+            {/* Search results */}
+            {searchResults.length > 0 && (
+              <div className="mt-4">
+                <h3 className="text-lg font-medium mb-2 dark:text-white">Existing Organizations</h3>
+                <ul className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {searchResults.map((org) => (
+                    <li key={org.id} className="py-3 flex justify-between items-center">
+                      <span className="dark:text-white">{org.name}</span>
+                      <button
+                        onClick={() => handleRequestJoin(org.id)}
+                        className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300"
+                      >
+                        Request to Join
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+            
+            <div className="mt-6 flex justify-end">
+              <button
+                onClick={closeModal}
+                className="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-gray-200"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+} 
