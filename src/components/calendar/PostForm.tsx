@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { format } from 'date-fns';
+import { format as dateFormat } from 'date-fns';
 import { useCalendar, Post } from './CalendarContext';
 
 interface PostFormProps {
@@ -10,10 +10,48 @@ interface PostFormProps {
   onClose: () => void;
 }
 
+// DeleteConfirmationModal component for better UX
+interface DeleteConfirmationModalProps {
+  onConfirm: () => void;
+  onCancel: () => void;
+  title: string;
+}
+
+const DeleteConfirmationModal = ({ onConfirm, onCancel, title }: DeleteConfirmationModalProps) => (
+  <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-md w-full">
+      <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">Confirm Deletion</h2>
+      
+      <p className="text-gray-700 dark:text-gray-300 mb-6">
+        Are you sure you want to delete <span className="font-medium">{title}</span>? This action cannot be undone.
+      </p>
+      
+      <div className="flex justify-end gap-3">
+        <button
+          onClick={onCancel}
+          className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={onConfirm}
+          className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  </div>
+);
+
 export default function PostForm({ date, post, onClose }: PostFormProps) {
-  const { addPost, refreshPosts } = useCalendar();
+  const { addPost, updatePost, deletePost, refreshPosts } = useCalendar();
   
   const [isViewMode, setIsViewMode] = useState(!!post);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
   const [title, setTitle] = useState(post?.title || '');
   const [url, setUrl] = useState(post?.url || '');
   const [description, setDescription] = useState(post?.description || '');
@@ -37,22 +75,75 @@ export default function PostForm({ date, post, onClose }: PostFormProps) {
   const handleSubmit = async (e: React.MouseEvent<HTMLButtonElement>) => {
     e.preventDefault();
     
-    // For now, we just show what would be submitted
-    // In a real implementation, this would save to Supabase
-    console.log('Would save post to Supabase:', {
-      title,
-      url,
-      description,
-      posted_date: date ? format(date, 'yyyy-MM-dd') : null,
-      status,
-      format
-    });
+    // Basic validation
+    if (!url || !url.trim()) {
+      setFormError('URL is required');
+      return;
+    }
+
+    if (!title || !title.trim()) {
+      setFormError('Title is required');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setFormError(null);
+      
+      const postData = {
+        title,
+        url,
+        description,
+        posted_date: date ? dateFormat(date, 'yyyy-MM-dd') : undefined,
+        status,
+        format
+      };
+
+      if (post) {
+        // Update existing post
+        await updatePost(post.id, postData);
+      } else {
+        // Create new post
+        await addPost(postData);
+      }
+      
+      // Refresh posts to show the updated list
+      await refreshPosts();
+      onClose();
+    } catch (error: any) {
+      setFormError(error.message || 'An error occurred while saving the post');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteClick = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    setShowDeleteConfirmation(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!post || !post.id) return;
     
-    alert('This would save the post to your database. Integration coming soon!');
-    
-    // Refresh posts to show the updated list
-    await refreshPosts();
-    onClose();
+    try {
+      setIsDeleting(true);
+      setFormError(null);
+      
+      await deletePost(post.id);
+      
+      // Refresh posts to show the updated list
+      await refreshPosts();
+      onClose();
+    } catch (error: any) {
+      setFormError(error.message || 'An error occurred while deleting the post');
+      setShowDeleteConfirmation(false);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const cancelDelete = () => {
+    setShowDeleteConfirmation(false);
   };
 
   const getStatusBadgeClass = () => {
@@ -75,9 +166,11 @@ export default function PostForm({ date, post, onClose }: PostFormProps) {
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
           {isViewMode 
             ? post?.title || 'View Post' 
-            : date 
-              ? `New Post for ${format(date, 'MMMM d, yyyy')}` 
-              : 'New Post'}
+            : post 
+              ? 'Edit Post' 
+              : date 
+                ? `New Post for ${dateFormat(date, 'MMMM d, yyyy')}` 
+                : 'New Post'}
         </h2>
         <button
           onClick={handleClose}
@@ -110,6 +203,13 @@ export default function PostForm({ date, post, onClose }: PostFormProps) {
         </div>
       )}
 
+      {/* Error message */}
+      {formError && (
+        <div className="mb-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded dark:bg-red-900 dark:border-red-600 dark:text-red-100">
+          <p>{formError}</p>
+        </div>
+      )}
+
       {isViewMode ? (
         // View mode for existing posts
         <div className="space-y-4">
@@ -135,7 +235,15 @@ export default function PostForm({ date, post, onClose }: PostFormProps) {
             </div>
           )}
           
-          <div className="pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end">
+          <div className="pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-between">
+            <button
+              onClick={handleDeleteClick}
+              disabled={isDeleting}
+              className={`px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 ${isDeleting ? 'opacity-70 cursor-not-allowed' : ''}`}
+            >
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </button>
+            
             <button
               onClick={() => setIsViewMode(false)}
               className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
@@ -218,21 +326,44 @@ export default function PostForm({ date, post, onClose }: PostFormProps) {
             </select>
           </div>
           
-          <div className="pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-2">
-            <button
-              onClick={handleClose}
-              className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
-            >
-              Cancel
-            </button>
-            <button
-              onClick={handleSubmit}
-              className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600"
-            >
-              Save
-            </button>
+          <div className="pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-between">
+            {post && (
+              <button
+                onClick={handleDeleteClick}
+                disabled={isSubmitting || isDeleting}
+                className={`px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 ${(isSubmitting || isDeleting) ? 'opacity-70 cursor-not-allowed' : ''}`}
+              >
+                {isDeleting ? 'Deleting...' : 'Delete'}
+              </button>
+            )}
+            
+            <div className="flex gap-2 ml-auto">
+              <button
+                onClick={handleClose}
+                className="px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-50 dark:hover:bg-gray-700"
+                disabled={isSubmitting || isDeleting}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSubmit}
+                disabled={isSubmitting || isDeleting}
+                className={`px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 ${(isSubmitting || isDeleting) ? 'opacity-70 cursor-not-allowed' : ''}`}
+              >
+                {isSubmitting ? 'Saving...' : post ? 'Update' : 'Save'}
+              </button>
+            </div>
           </div>
         </form>
+      )}
+
+      {/* Delete confirmation modal */}
+      {showDeleteConfirmation && (
+        <DeleteConfirmationModal
+          onConfirm={confirmDelete}
+          onCancel={cancelDelete}
+          title={post?.title || 'this post'}
+        />
       )}
     </div>
   );

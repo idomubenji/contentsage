@@ -102,7 +102,11 @@ export default function Calendar() {
     <div className="flex flex-col h-full w-full">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-3 p-3 w-full">
         <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
-          <div className="flex items-center gap-2">
+          {/* Left spacer div for balance */}
+          <div className="hidden sm:block sm:w-1/4"></div>
+          
+          {/* Center navigation controls */}
+          <div className="flex items-center gap-2 sm:absolute sm:left-1/2 sm:transform sm:-translate-x-1/2">
             <button 
               onClick={() => navigateCalendar('prev')}
               className="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200"
@@ -135,6 +139,7 @@ export default function Calendar() {
             </button>
           </div>
           
+          {/* Right view options */}
           <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 p-1 rounded-md">
             {viewOptions.map((option) => (
               <button

@@ -13,7 +13,7 @@ export interface Post {
   url: string;
   title: string;
   description: string;
-  posted_date: string;
+  posted_date?: string;
   format: string;
   status: 'POSTED' | 'SCHEDULED' | 'SUGGESTED';
   platform?: string;
@@ -28,8 +28,9 @@ interface CalendarContextType {
   error: string | null;
   setCurrentDate: (date: Date) => void;
   setView: (view: CalendarViewType) => void;
-  addPost: (post: Omit<Post, 'id'>) => void;
-  deletePost: (id: string) => void;
+  addPost: (post: Omit<Post, 'id'>) => Promise<void>;
+  updatePost: (id: string, postData: Partial<Post>) => Promise<void>;
+  deletePost: (id: string) => Promise<void>;
   getPostsForDate: (date: Date) => Post[];
   getPostsForMonth: (date: Date) => Post[];
   refreshPosts: () => Promise<void>;
@@ -100,15 +101,121 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
     fetchPosts();
   }, [user]);
 
-  const addPost = (post: Omit<Post, 'id'>) => {
-    // For new posts created in the calendar, we'd handle that separately
-    // This would involve inserting into Supabase
-    console.log('Adding post would insert to Supabase:', post);
+  const addPost = async (post: Omit<Post, 'id'>) => {
+    if (!user) {
+      setError("Please sign in to add content");
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Insert post into Supabase
+      const { data, error: insertError } = await supabase
+        .from('posts')
+        .insert([{ ...post, user_id: user.id }])
+        .select();
+        
+      if (insertError) {
+        throw new Error(insertError.message);
+      }
+      
+      if (data && data.length > 0) {
+        // Add the new post to the local state with color
+        const newPost = {
+          ...data[0],
+          color: getPostColor(data[0])
+        };
+        
+        setPosts(prevPosts => [newPost, ...prevPosts]);
+        console.log('Post added successfully:', newPost.id);
+      }
+    } catch (err: any) {
+      console.error('Error adding post:', err);
+      setError(err.message || 'Failed to add post');
+      throw err; // Re-throw for the UI to handle
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const deletePost = (id: string) => {
-    // This would involve deleting from Supabase
-    console.log('Deleting post would remove from Supabase:', id);
+  const updatePost = async (id: string, postData: Partial<Post>) => {
+    if (!user) {
+      setError("Please sign in to update content");
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Update post in Supabase
+      const { error: updateError } = await supabase
+        .from('posts')
+        .update(postData)
+        .eq('id', id);
+        
+      if (updateError) {
+        throw new Error(updateError.message);
+      }
+      
+      // Update local state
+      setPosts(prevPosts => 
+        prevPosts.map(post => 
+          post.id === id 
+            ? { ...post, ...postData, color: getPostColor({ ...post, ...postData }) } 
+            : post
+        )
+      );
+      
+      console.log('Post updated successfully:', id);
+    } catch (err: any) {
+      console.error('Error updating post:', err);
+      setError(err.message || 'Failed to update post');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const deletePost = async (id: string) => {
+    if (!user) {
+      setError("Please sign in to delete content");
+      return;
+    }
+    
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Delete post from Supabase
+      const { error: deleteError } = await supabase
+        .from('posts')
+        .delete()
+        .eq('id', id);
+        
+      if (deleteError) {
+        throw new Error(deleteError.message);
+      }
+      
+      // Remove from local state
+      setPosts(prevPosts => prevPosts.filter(post => post.id !== id));
+      console.log('Post deleted successfully:', id);
+    } catch (err: any) {
+      console.error('Error deleting post:', err);
+      setError(err.message || 'Failed to delete post');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Helper function to determine post color based on status
+  const getPostColor = (post: Post) => {
+    return post.status === 'POSTED' 
+      ? '#10b981' // green for posted
+      : post.status === 'SCHEDULED' 
+        ? '#4f46e5' // indigo for scheduled
+        : '#f59e0b'; // amber for suggested
   };
 
   const getPostsForDate = (date: Date) => {
@@ -145,6 +252,7 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
         setCurrentDate,
         setView,
         addPost,
+        updatePost,
         deletePost,
         getPostsForDate,
         getPostsForMonth,
