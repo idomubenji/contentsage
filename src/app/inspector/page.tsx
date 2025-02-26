@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 import { format } from 'date-fns';
@@ -22,10 +22,79 @@ type Post = {
   created_at: string;
 };
 
+// Define filter types
+type DateRange = {
+  startDate: string | null;
+  endDate: string | null;
+};
+
+type Filters = {
+  format: string[] | null;
+  status: string[] | null;
+  platform: string[] | null;
+  dateRange: DateRange;
+};
+
+// Multi-select filter component using capsules/chips
+function MultiSelectFilter({
+  label,
+  options,
+  selectedValues,
+  onChange,
+  colorMap
+}: {
+  label: string;
+  options: string[];
+  selectedValues: string[] | null;
+  onChange: (values: string[] | null) => void;
+  colorMap?: Record<string, string>;
+}) {
+  // Toggle a value in the selection
+  const toggleValue = (value: string) => {
+    if (!selectedValues) {
+      onChange([value]);
+    } else if (selectedValues.includes(value)) {
+      const newValues = selectedValues.filter(v => v !== value);
+      onChange(newValues.length > 0 ? newValues : null);
+    } else {
+      onChange([...selectedValues, value]);
+    }
+  };
+
+  return (
+    <div>
+      <p className="font-medium text-xs mb-1.5">{label}</p>
+      <div className="flex flex-wrap gap-1">
+        {options.map((option) => {
+          const isSelected = selectedValues?.includes(option) || false;
+          const colorClass = isSelected ? (colorMap && colorMap[option]) || 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700';
+          
+          return (
+            <button
+              key={option}
+              onClick={() => toggleValue(option)}
+              className={`${colorClass} border text-xs px-2 py-0.5 rounded-full flex items-center whitespace-nowrap`}
+            >
+              {option}
+              {isSelected && (
+                <span className="ml-0.5">
+                  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-2.5 h-2.5">
+                    <path d="M6.28 5.22a.75.75 0 00-1.06 1.06L8.94 10l-3.72 3.72a.75.75 0 101.06 1.06L10 11.06l3.72 3.72a.75.75 0 101.06-1.06L11.06 10l3.72-3.72a.75.75 0 00-1.06-1.06L10 8.94 6.28 5.22z" />
+                  </svg>
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // Pagination component to reuse at top and bottom
 function PaginationControls({ 
   currentPage, 
-  totalPages, 
+  totalPages,
   totalItems,
   itemsPerPage,
   selectedItems,
@@ -182,6 +251,116 @@ function PaginationControls({
   );
 }
 
+// Filter panel component
+function FilterPanel({
+  filters,
+  onFilterChange,
+  formats,
+  platforms,
+  statuses,
+  onClearFilters
+}: {
+  filters: Filters;
+  onFilterChange: (name: string, value: any) => void;
+  formats: string[];
+  platforms: string[];
+  statuses: string[];
+  onClearFilters: () => void;
+}) {
+  // Count active filters
+  const activeFilterCount = [
+    (filters.format && filters.format.length > 0) ? 1 : 0, 
+    (filters.status && filters.status.length > 0) ? 1 : 0, 
+    (filters.platform && filters.platform.length > 0) ? 1 : 0, 
+    filters.dateRange.startDate ? 1 : 0, 
+    filters.dateRange.endDate ? 1 : 0
+  ].reduce((sum, count) => sum + count, 0);
+  
+  // Status color map for the chips
+  const statusColorMap: Record<string, string> = {
+    'posted': 'bg-green-50 text-green-700 border-green-200',
+    'scheduled': 'bg-blue-50 text-blue-700 border-blue-200',
+    'suggested': 'bg-amber-50 text-amber-700 border-amber-200'
+  };
+  
+  return (
+    <div className="mb-6 bg-white p-5 rounded-md shadow-sm">
+      <div className="flex justify-between items-center mb-5">
+        <h2 className="text-lg font-medium">
+          Filter Content
+          {activeFilterCount > 0 && (
+            <span className="ml-2 px-2 py-0.5 text-xs bg-blue-100 text-blue-800 rounded-full">
+              {activeFilterCount} active
+            </span>
+          )}
+        </h2>
+        {activeFilterCount > 0 && (
+          <button
+            onClick={onClearFilters}
+            className="text-sm text-blue-600 hover:text-blue-800"
+          >
+            Clear all filters
+          </button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-x-5 gap-y-4">
+        {/* Format filter - using multi-select capsules */}
+        <MultiSelectFilter
+          label="Format"
+          options={formats}
+          selectedValues={filters.format}
+          onChange={(values) => onFilterChange('format', values)}
+        />
+
+        {/* Status filter - using multi-select capsules with color mapping */}
+        <MultiSelectFilter
+          label="Status"
+          options={statuses.map(s => s.toLowerCase())}
+          selectedValues={filters.status}
+          onChange={(values) => onFilterChange('status', values)}
+          colorMap={statusColorMap}
+        />
+
+        {/* Platform filter - using multi-select capsules */}
+        <MultiSelectFilter
+          label="Platform"
+          options={platforms}
+          selectedValues={filters.platform}
+          onChange={(values) => onFilterChange('platform', values)}
+        />
+
+        {/* Date range filter */}
+        <div>
+          <p className="font-medium text-xs mb-1.5">Date Range</p>
+          <div className="flex space-x-1.5">
+            <input
+              type="date"
+              value={filters.dateRange.startDate || ''}
+              onChange={(e) => onFilterChange('dateRange', { 
+                ...filters.dateRange, 
+                startDate: e.target.value || null 
+              })}
+              className="w-full px-2 py-0.5 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              placeholder="From"
+            />
+            <input
+              type="date"
+              value={filters.dateRange.endDate || ''}
+              onChange={(e) => onFilterChange('dateRange', { 
+                ...filters.dateRange, 
+                endDate: e.target.value || null 
+              })}
+              className="w-full px-2 py-0.5 text-xs border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+              placeholder="To"
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Inspector() {
   const [posts, setPosts] = useState<Post[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -202,9 +381,141 @@ export default function Inspector() {
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   
+  // Filter state
+  const [filters, setFilters] = useState<Filters>({
+    format: null,
+    status: null,
+    platform: null,
+    dateRange: {
+      startDate: null,
+      endDate: null
+    }
+  });
+  
+  // Available filter options
+  const [availableFormats, setAvailableFormats] = useState<string[]>([]);
+  const [availablePlatforms, setAvailablePlatforms] = useState<string[]>([]);
+  const availableStatuses = ['posted', 'scheduled', 'suggested'];
+  
+  // Filtered posts
+  const [filteredPosts, setFilteredPosts] = useState<Post[]>([]);
+  
   // Keyboard navigation state
   const [focusedRowIndex, setFocusedRowIndex] = useState<number | null>(null);
   const [lastSelectedIndex, setLastSelectedIndex] = useState<number | null>(null);
+  
+  // Ref for the table container
+  const tableRef = useRef<HTMLDivElement>(null);
+  
+  // Add row refs to track positions dynamically - moved inside the component
+  const rowRefs = useRef<(HTMLTableRowElement | null)[]>([]);
+  
+  // Initialize filteredPosts when posts change
+  useEffect(() => {
+    setFilteredPosts(posts);
+  }, [posts]);
+  
+  // Handle filter changes
+  const handleFilterChange = (name: string, value: any) => {
+    setFilters(prevFilters => ({
+      ...prevFilters,
+      [name]: value
+    }));
+    
+    // Reset to first page when filters change
+    setCurrentPage(1);
+  };
+  
+  // Clear all filters
+  const handleClearFilters = () => {
+    setFilters({
+      format: null,
+      status: null,
+      platform: null,
+      dateRange: {
+        startDate: null,
+        endDate: null
+      }
+    });
+    
+    // Reset to first page
+    setCurrentPage(1);
+  };
+  
+  // Apply filters to posts
+  useEffect(() => {
+    if (posts.length === 0) {
+      setFilteredPosts([]);
+      return;
+    }
+    
+    let result = [...posts];
+    
+    // Apply format filter
+    if (filters.format && filters.format.length > 0) {
+      result = result.filter(post => 
+        filters.format!.includes(post.format?.toLowerCase() || '')
+      );
+    }
+    
+    // Apply status filter
+    if (filters.status && filters.status.length > 0) {
+      result = result.filter(post => 
+        filters.status!.includes(post.status.toLowerCase())
+      );
+    }
+    
+    // Apply platform filter
+    if (filters.platform && filters.platform.length > 0) {
+      result = result.filter(post => 
+        filters.platform!.includes(post.platform?.toLowerCase() || '')
+      );
+    }
+    
+    // Apply date range filter
+    if (filters.dateRange.startDate || filters.dateRange.endDate) {
+      result = result.filter(post => {
+        const postedDate = new Date(post.posted_date);
+        
+        if (filters.dateRange.startDate) {
+          const startDate = new Date(filters.dateRange.startDate);
+          startDate.setHours(0, 0, 0, 0);
+          if (postedDate < startDate) return false;
+        }
+        
+        if (filters.dateRange.endDate) {
+          const endDate = new Date(filters.dateRange.endDate);
+          endDate.setHours(23, 59, 59, 999);
+          if (postedDate > endDate) return false;
+        }
+        
+        return true;
+      });
+    }
+    
+    setFilteredPosts(result);
+    
+    // Clear selections when filters change
+    setSelectedPosts([]);
+    
+  }, [posts, filters]);
+  
+  // Handle clicks outside the table to unhighlight rows
+  useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      // Skip if modals are open or if the click is inside the table
+      if (isEditModalOpen || isDeleteModalOpen) return;
+      
+      // If the click is outside the table, clear highlighting
+      if (tableRef.current && !tableRef.current.contains(e.target as Node)) {
+        setFocusedRowIndex(null);
+        setLastSelectedIndex(null);
+      }
+    };
+    
+    document.addEventListener('mousedown', handleOutsideClick);
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [isEditModalOpen, isDeleteModalOpen]);
   
   // Handle keyboard shortcuts for the edit modal
   useEffect(() => {
@@ -407,6 +718,22 @@ export default function Inspector() {
 
         console.log(`Found ${data?.length || 0} posts for user`);
         setPosts(data || []);
+        
+        // Extract unique format and platform values for filters
+        if (data) {
+          const formats = Array.from(new Set(data
+            .map(post => post.format?.toLowerCase() || '')
+            .filter(Boolean)))
+            .sort();
+          
+          const platforms = Array.from(new Set(data
+            .map(post => post.platform?.toLowerCase() || '')
+            .filter(Boolean)))
+            .sort();
+          
+          setAvailableFormats(formats);
+          setAvailablePlatforms(platforms);
+        }
       } catch (err: any) {
         console.error('Error fetching posts:', err);
         // Provide more detailed error message
@@ -440,8 +767,8 @@ export default function Inspector() {
   // Get current posts for pagination
   const indexOfLastPost = currentPage * postsPerPage;
   const indexOfFirstPost = indexOfLastPost - postsPerPage;
-  const currentPosts = posts.slice(indexOfFirstPost, indexOfLastPost);
-  const totalPages = Math.ceil(posts.length / postsPerPage);
+  const currentPosts = filteredPosts.slice(indexOfFirstPost, indexOfLastPost);
+  const totalPages = Math.ceil(filteredPosts.length / postsPerPage);
   
   // Change page
   const handlePageChange = (pageNumber: number) => {
@@ -572,6 +899,17 @@ export default function Inspector() {
     setIsDeleteModalOpen(true);
   };
 
+  // Reset refs array when posts change
+  useEffect(() => {
+    // Initialize the refs array with the correct length
+    rowRefs.current = rowRefs.current.slice(0, currentPosts.length);
+    
+    // Fill with nulls if needed
+    while (rowRefs.current.length < currentPosts.length) {
+      rowRefs.current.push(null);
+    }
+  }, [currentPosts.length]);
+
   return (
     <div className="p-8">
       <h1 className="text-3xl font-bold mb-6">Content Inspector</h1>
@@ -599,341 +937,367 @@ export default function Inspector() {
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          {/* Pagination / Batch action controls - show for both pagination and selection */}
-          <PaginationControls 
-            currentPage={currentPage} 
-            totalPages={totalPages}
-            totalItems={posts.length}
-            itemsPerPage={postsPerPage}
-            selectedItems={selectedPosts}
-            onPageChange={handlePageChange}
-            onDeleteSelected={() => setIsDeleteModalOpen(true)}
+        <>
+          {/* Filter panel */}
+          <FilterPanel
+            filters={filters}
+            onFilterChange={handleFilterChange}
+            formats={availableFormats}
+            platforms={availablePlatforms}
+            statuses={availableStatuses}
+            onClearFilters={handleClearFilters}
           />
           
-          <table className="w-full border-collapse">
-            <thead>
-              <tr className="bg-gray-100 dark:bg-gray-800">
-                <th className="px-4 py-3 text-left">
-                  <div className="flex items-center">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      checked={selectedPosts.length === currentPosts.length && currentPosts.length > 0}
-                      onChange={handleSelectAll}
-                    />
-                  </div>
-                </th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Title</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Posted Date</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Format</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Platform</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Status</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Description</th>
-                <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-              {currentPosts.map((post, index) => (
-                <tr 
-                  key={post.id} 
-                  className={`hover:bg-gray-50 dark:hover:bg-gray-700/30 ${
-                    focusedRowIndex === index || (
-                      lastSelectedIndex !== null && 
-                      focusedRowIndex !== null && 
-                      index >= Math.min(lastSelectedIndex, focusedRowIndex) && 
-                      index <= Math.max(lastSelectedIndex, focusedRowIndex)
-                    ) ? 'bg-blue-50 dark:bg-blue-900/30 outline outline-2 outline-blue-400' : ''
-                  }`}
-                  onClick={(e) => {
-                    // Update focused row
-                    setFocusedRowIndex(index);
+          {filteredPosts.length === 0 ? (
+            <div className="bg-gray-100 p-8 rounded-md text-center">
+              <p className="text-gray-700 mb-4">No content matches your filter criteria.</p>
+              <p className="text-gray-600">
+                Try adjusting your filters or <button onClick={handleClearFilters} className="text-blue-600 hover:underline">clear all filters</button> to see more results.
+              </p>
+            </div>
+          ) : (
+            <div className="relative overflow-x-auto" ref={tableRef}>
+              {/* Pagination / Batch action controls - show for both pagination and selection */}
+              <PaginationControls 
+                currentPage={currentPage} 
+                totalPages={totalPages}
+                totalItems={filteredPosts.length}
+                itemsPerPage={postsPerPage}
+                selectedItems={selectedPosts}
+                onPageChange={handlePageChange}
+                onDeleteSelected={() => setIsDeleteModalOpen(true)}
+              />
+              
+              <table className="w-full border-collapse border-spacing-0">
+                <thead>
+                  <tr className="bg-gray-100 dark:bg-gray-800">
+                    <th className="px-4 py-3 text-left">
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                          checked={selectedPosts.length === currentPosts.length && currentPosts.length > 0}
+                          onChange={handleSelectAll}
+                        />
+                      </div>
+                    </th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Title</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Posted Date</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Format</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Platform</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Status</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Description</th>
+                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
+                  {currentPosts.map((post, index) => {
+                    // Determine if this row should be highlighted
+                    const isHighlighted = focusedRowIndex !== null && 
+                      ((lastSelectedIndex !== null && 
+                        index >= Math.min(focusedRowIndex, lastSelectedIndex) && 
+                        index <= Math.max(focusedRowIndex, lastSelectedIndex)) ||
+                       (lastSelectedIndex === null && index === focusedRowIndex));
                     
-                    // Handle selection logic with shift and ctrl/cmd keys
-                    if (e.shiftKey && lastSelectedIndex !== null) {
-                      const start = Math.min(lastSelectedIndex, index);
-                      const end = Math.max(lastSelectedIndex, index);
-                      const rangeIds = currentPosts.slice(start, end + 1).map(p => p.id);
+                    return (
+                      <tr 
+                        key={post.id}
+                        ref={el => { rowRefs.current[index] = el; }}
+                        className={`hover:bg-gray-50 dark:hover:bg-gray-700/30 ${
+                          isHighlighted ? 'bg-blue-100 border-blue-400 rounded-md' : ''
+                        }`}
+                        onClick={(e) => {
+                          // Update focused row
+                          setFocusedRowIndex(index);
+                          
+                          // Handle selection logic with shift and ctrl/cmd keys
+                          if (e.shiftKey && lastSelectedIndex !== null) {
+                            const start = Math.min(lastSelectedIndex, index);
+                            const end = Math.max(lastSelectedIndex, index);
+                            const rangeIds = currentPosts.slice(start, end + 1).map(p => p.id);
+                            
+                            setSelectedPosts(prev => {
+                              const outsideRangeSelections = prev.filter(id => 
+                                !currentPosts.some((post, idx) => post.id === id && idx >= start && idx <= end)
+                              );
+                              return [...new Set([...outsideRangeSelections, ...rangeIds])];
+                            });
+                          } else if ((e.metaKey || e.ctrlKey)) {
+                            // Don't reset lastSelectedIndex when ctrl/cmd is pressed
+                            handleSelectPost(post.id);
+                          } else {
+                            // Regular click: set as the only selected if not already selected
+                            if (
+                              e.target instanceof HTMLElement && 
+                              !e.target.closest('input[type="checkbox"]') && 
+                              !e.target.closest('button')
+                            ) {
+                              if (!selectedPosts.includes(post.id)) {
+                                setSelectedPosts([post.id]);
+                              }
+                              setLastSelectedIndex(index);
+                            }
+                          }
+                        }}
+                        onDoubleClick={() => handleEdit(post.id)}
+                      >
+                        <td className="px-4 py-4">
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            checked={selectedPosts.includes(post.id)}
+                            onChange={() => handleSelectPost(post.id)}
+                          />
+                        </td>
+                        <td className="px-4 py-4">
+                          <a 
+                            href={post.url} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+                          >
+                            {truncateText(post.title, 60) || 'Untitled'}
+                          </a>
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">
+                          {formatDate(post.posted_date)}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">
+                          <span className="capitalize">{post.format || 'N/A'}</span>
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">
+                          <span className="capitalize">{post.platform || 'Website'}</span>
+                        </td>
+                        <td className="px-4 py-4 text-sm">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium
+                            ${post.status === 'POSTED' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 
+                              post.status === 'SCHEDULED' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' : 
+                              'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'}`}>
+                            {post.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">
+                          {truncateText(post.description, 80) || 'No description'}
+                        </td>
+                        <td className="px-4 py-4 text-sm whitespace-nowrap">
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleEdit(post.id)}
+                              className="px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
+                            >
+                              Edit
+                            </button>
+                            <button
+                              onClick={() => handleDelete(post.id)}
+                              className="px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              
+              {/* Bottom pagination controls */}
+              <PaginationControls 
+                currentPage={currentPage} 
+                totalPages={totalPages}
+                totalItems={filteredPosts.length}
+                itemsPerPage={postsPerPage}
+                selectedItems={selectedPosts}
+                onPageChange={handlePageChange}
+                onDeleteSelected={() => setIsDeleteModalOpen(true)}
+              />
+              
+              {/* Delete confirmation modal */}
+              {isDeleteModalOpen && (
+                <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+                  <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
+                    <h3 className="text-lg font-medium mb-4">Confirm Deletion</h3>
+                    <p className="mb-6">
+                      Are you sure you want to delete {selectedPosts.length} selected item{selectedPosts.length > 1 ? 's' : ''}? 
+                      This action cannot be undone.
+                    </p>
+                    <div className="flex justify-end space-x-3">
+                      <button
+                        onClick={() => setIsDeleteModalOpen(false)}
+                        disabled={isDeleting}
+                        className={`px-4 py-2 border border-gray-300 rounded-md text-gray-700 ${isDeleting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleBatchDelete}
+                        disabled={isDeleting}
+                        className={`px-4 py-2 bg-red-600 text-white rounded-md ${isDeleting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-700'} flex items-center`}
+                      >
+                        {isDeleting ? (
+                          <>
+                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Deleting...
+                          </>
+                        ) : (
+                          <>
+                            Delete <span className="ml-2 text-xs opacity-70">⌘⏎</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+              
+              {/* Edit modal */}
+              {isEditModalOpen && editingPost && (
+                <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+                  <div className="bg-white p-6 rounded-lg shadow-xl max-w-2xl w-full">
+                    <h3 className="text-lg font-medium mb-4">Edit Content</h3>
+                    
+                    <div className="space-y-4">
+                      <div>
+                        <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
+                          Title
+                        </label>
+                        <input
+                          type="text"
+                          id="title"
+                          name="title"
+                          value={editingPost.title}
+                          onChange={handleInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
                       
-                      setSelectedPosts(prev => {
-                        const outsideRangeSelections = prev.filter(id => 
-                          !currentPosts.some((post, idx) => post.id === id && idx >= start && idx <= end)
-                        );
-                        return [...new Set([...outsideRangeSelections, ...rangeIds])];
-                      });
-                    } else if ((e.metaKey || e.ctrlKey)) {
-                      // Don't reset lastSelectedIndex when ctrl/cmd is pressed
-                      handleSelectPost(post.id);
-                    } else {
-                      // Regular click: set as the only selected if not already selected
-                      if (
-                        e.target instanceof HTMLElement && 
-                        !e.target.closest('input[type="checkbox"]') && 
-                        !e.target.closest('button')
-                      ) {
-                        if (!selectedPosts.includes(post.id)) {
-                          setSelectedPosts([post.id]);
-                        }
-                        setLastSelectedIndex(index);
-                      }
-                    }
-                  }}
-                  onDoubleClick={() => handleEdit(post.id)}
-                >
-                  <td className="px-4 py-4">
-                    <input
-                      type="checkbox"
-                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                      checked={selectedPosts.includes(post.id)}
-                      onChange={() => handleSelectPost(post.id)}
-                    />
-                  </td>
-                  <td className="px-4 py-4">
-                    <a 
-                      href={post.url} 
-                      target="_blank" 
-                      rel="noopener noreferrer" 
-                      className="text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
-                    >
-                      {truncateText(post.title, 60) || 'Untitled'}
-                    </a>
-                  </td>
-                  <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">
-                    {formatDate(post.posted_date)}
-                  </td>
-                  <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">
-                    <span className="capitalize">{post.format || 'N/A'}</span>
-                  </td>
-                  <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">
-                    <span className="capitalize">{post.platform || 'Website'}</span>
-                  </td>
-                  <td className="px-4 py-4 text-sm">
-                    <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium
-                      ${post.status === 'POSTED' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 
-                        post.status === 'SCHEDULED' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' : 
-                        'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'}`}>
-                      {post.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-4 text-sm text-gray-600 dark:text-gray-300">
-                    {truncateText(post.description, 80) || 'No description'}
-                  </td>
-                  <td className="px-4 py-4 text-sm whitespace-nowrap">
-                    <div className="flex space-x-2">
-                      <button
-                        onClick={() => handleEdit(post.id)}
-                        className="px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(post.id)}
-                        className="px-2 py-1 bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          
-          {/* Bottom pagination controls */}
-          <PaginationControls 
-            currentPage={currentPage} 
-            totalPages={totalPages}
-            totalItems={posts.length}
-            itemsPerPage={postsPerPage}
-            selectedItems={selectedPosts}
-            onPageChange={handlePageChange}
-            onDeleteSelected={() => setIsDeleteModalOpen(true)}
-          />
-          
-          {/* Delete confirmation modal */}
-          {isDeleteModalOpen && (
-            <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full">
-                <h3 className="text-lg font-medium mb-4">Confirm Deletion</h3>
-                <p className="mb-6">
-                  Are you sure you want to delete {selectedPosts.length} selected item{selectedPosts.length > 1 ? 's' : ''}? 
-                  This action cannot be undone.
-                </p>
-                <div className="flex justify-end space-x-3">
-                  <button
-                    onClick={() => setIsDeleteModalOpen(false)}
-                    disabled={isDeleting}
-                    className={`px-4 py-2 border border-gray-300 rounded-md text-gray-700 ${isDeleting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleBatchDelete}
-                    disabled={isDeleting}
-                    className={`px-4 py-2 bg-red-600 text-white rounded-md ${isDeleting ? 'opacity-50 cursor-not-allowed' : 'hover:bg-red-700'} flex items-center`}
-                  >
-                    {isDeleting ? (
-                      <>
-                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Deleting...
-                      </>
-                    ) : (
-                      <>
-                        Delete <span className="ml-2 text-xs opacity-70">⌘⏎</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-          
-          {/* Edit modal */}
-          {isEditModalOpen && editingPost && (
-            <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white p-6 rounded-lg shadow-xl max-w-2xl w-full">
-                <h3 className="text-lg font-medium mb-4">Edit Content</h3>
-                
-                <div className="space-y-4">
-                  <div>
-                    <label htmlFor="title" className="block text-sm font-medium text-gray-700 mb-1">
-                      Title
-                    </label>
-                    <input
-                      type="text"
-                      id="title"
-                      name="title"
-                      value={editingPost.title}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label htmlFor="url" className="block text-sm font-medium text-gray-700 mb-1">
-                      URL
-                    </label>
-                    <input
-                      type="url"
-                      id="url"
-                      name="url"
-                      value={editingPost.url}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  
-                  <div>
-                    <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
-                      Description
-                    </label>
-                    <textarea
-                      id="description"
-                      name="description"
-                      rows={3}
-                      value={editingPost.description}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label htmlFor="format" className="block text-sm font-medium text-gray-700 mb-1">
-                        Format
-                      </label>
-                      <select
-                        id="format"
-                        name="format"
-                        value={editingPost.format}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                      >
-                        <option value="article">Article</option>
-                        <option value="video">Video</option>
-                        <option value="podcast">Podcast</option>
-                        <option value="infographic">Infographic</option>
-                        <option value="social">Social Post</option>
-                      </select>
+                      <div>
+                        <label htmlFor="url" className="block text-sm font-medium text-gray-700 mb-1">
+                          URL
+                        </label>
+                        <input
+                          type="url"
+                          id="url"
+                          name="url"
+                          value={editingPost.url}
+                          onChange={handleInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                      
+                      <div>
+                        <label htmlFor="description" className="block text-sm font-medium text-gray-700 mb-1">
+                          Description
+                        </label>
+                        <textarea
+                          id="description"
+                          name="description"
+                          rows={3}
+                          value={editingPost.description}
+                          onChange={handleInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        <div>
+                          <label htmlFor="format" className="block text-sm font-medium text-gray-700 mb-1">
+                            Format
+                          </label>
+                          <select
+                            id="format"
+                            name="format"
+                            value={editingPost.format}
+                            onChange={handleInputChange}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          >
+                            <option value="article">Article</option>
+                            <option value="video">Video</option>
+                            <option value="podcast">Podcast</option>
+                            <option value="infographic">Infographic</option>
+                            <option value="social">Social Post</option>
+                          </select>
+                        </div>
+                        
+                        <div>
+                          <label htmlFor="platform" className="block text-sm font-medium text-gray-700 mb-1">
+                            Platform
+                          </label>
+                          <select
+                            id="platform"
+                            name="platform"
+                            value={editingPost.platform}
+                            onChange={handleInputChange}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                          >
+                            <option value="website">Website</option>
+                            <option value="linkedin">LinkedIn</option>
+                            <option value="twitter">Twitter</option>
+                            <option value="facebook">Facebook</option>
+                            <option value="instagram">Instagram</option>
+                            <option value="youtube">YouTube</option>
+                          </select>
+                        </div>
+                      </div>
+                      
+                      <div>
+                        <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
+                          Status
+                        </label>
+                        <select
+                          id="status"
+                          name="status"
+                          value={editingPost.status}
+                          onChange={handleInputChange}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        >
+                          <option value="POSTED">Posted</option>
+                          <option value="SCHEDULED">Scheduled</option>
+                          <option value="SUGGESTED">Suggested</option>
+                        </select>
+                      </div>
                     </div>
                     
-                    <div>
-                      <label htmlFor="platform" className="block text-sm font-medium text-gray-700 mb-1">
-                        Platform
-                      </label>
-                      <select
-                        id="platform"
-                        name="platform"
-                        value={editingPost.platform}
-                        onChange={handleInputChange}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                    <div className="flex justify-end space-x-3 mt-6">
+                      <button
+                        onClick={() => {
+                          setIsEditModalOpen(false);
+                          setEditingPost(null);
+                        }}
+                        disabled={isSaving}
+                        className={`px-4 py-2 border border-gray-300 rounded-md text-gray-700 ${isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}
                       >
-                        <option value="website">Website</option>
-                        <option value="linkedin">LinkedIn</option>
-                        <option value="twitter">Twitter</option>
-                        <option value="facebook">Facebook</option>
-                        <option value="instagram">Instagram</option>
-                        <option value="youtube">YouTube</option>
-                      </select>
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleSaveEdit}
+                        disabled={isSaving}
+                        className={`px-4 py-2 bg-blue-600 text-white rounded-md ${isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'} flex items-center`}
+                      >
+                        {isSaving ? (
+                          <>
+                            <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                            </svg>
+                            Saving...
+                          </>
+                        ) : (
+                          <>
+                            Save Changes <span className="ml-2 text-xs opacity-70">⌘⏎</span>
+                          </>
+                        )}
+                      </button>
                     </div>
                   </div>
-                  
-                  <div>
-                    <label htmlFor="status" className="block text-sm font-medium text-gray-700 mb-1">
-                      Status
-                    </label>
-                    <select
-                      id="status"
-                      name="status"
-                      value={editingPost.status}
-                      onChange={handleInputChange}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option value="POSTED">Posted</option>
-                      <option value="SCHEDULED">Scheduled</option>
-                      <option value="SUGGESTED">Suggested</option>
-                    </select>
-                  </div>
                 </div>
-                
-                <div className="flex justify-end space-x-3 mt-6">
-                  <button
-                    onClick={() => {
-                      setIsEditModalOpen(false);
-                      setEditingPost(null);
-                    }}
-                    disabled={isSaving}
-                    className={`px-4 py-2 border border-gray-300 rounded-md text-gray-700 ${isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:bg-gray-50'}`}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSaveEdit}
-                    disabled={isSaving}
-                    className={`px-4 py-2 bg-blue-600 text-white rounded-md ${isSaving ? 'opacity-50 cursor-not-allowed' : 'hover:bg-blue-700'} flex items-center`}
-                  >
-                    {isSaving ? (
-                      <>
-                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        Save Changes <span className="ml-2 text-xs opacity-70">⌘⏎</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
+              )}
             </div>
           )}
-        </div>
+        </>
       )}
     </div>
   );
