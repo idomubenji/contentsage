@@ -90,61 +90,70 @@ export async function POST(request: NextRequest) {
     const endDate = endDateMap[timeFrame as keyof typeof endDateMap] || addDays(startDate, 30);
     
     // Call OpenAI API
-    const completion = await openai.chat.completions.create({
-      model: "gpt-4", // or whichever model you're using
-      messages: [
-        { 
-          role: "system", 
-          content: `You are a social media and content planning expert. 
-          Generate exactly the requested number of content suggestions for each platform:
-          ${platformRequests}.
-          
-          Strictly follow these scheduling guidelines for optimal engagement:
-          ${schedulingGuidance}
-          
-          IMPORTANT DISTRIBUTION GUIDELINE:
-          - For month or longer timeframes, evenly distribute posts across all weeks of the period
-          - Do not cluster posts at the beginning or end of the timeframe
-          - Aim for a balanced distribution throughout the entire period
-          
-          The content should be relevant to ${orgData.name}, a company in the ${
-            orgData.preferences?.industry || 'technology'
-          } industry. 
-          The content tone should be ${orgData.preferences?.contentTone || 'professional'}.
-          
-          Format your response as a valid JSON structure with an array of suggestions, each containing:
-          1. title - A compelling title for the post
-          2. description - A brief description or content summary
-          3. platform - The exact platform name from the user request
-          4. date - A specific date between ${format(startDate, 'yyyy-MM-dd')} and ${format(endDate, 'yyyy-MM-dd')} with time in 24h format (YYYY-MM-DD HH:MM)
-          5. reasonsData - An object with "reasons" array explaining why this content is suggested, and "aiConfidence" number between 0-1
-          
-          FOR X POSTS: Schedule only on Mondays and Tuesdays between 10:00 and 13:00.`
-        },
-        {
-          role: "user",
-          content: `Please create a content plan for the ${timeFrame} starting on ${format(startDate, 'yyyy-MM-dd')}. 
-          I need exactly: ${platformRequests}. 
-          ${customPrompt ? `Focus on these themes or topics: ${customPrompt}` : ''}
-          ${recentPosts && recentPosts.length > 0 ? `Recent posts for context: ${JSON.stringify(recentPosts)}` : ''}
-          
-          IMPORTANT: Please evenly distribute the posts across the entire ${timeFrame}, not clustering them at the beginning or end.
-          
-          Response should be valid JSON. Ensure each platform has exactly the number of posts specified.`
-        }
-      ],
-      temperature: 0.7,
-      // Remove the response_format parameter as it's not supported by the model you're using
-    });
-    
-    const responseContent = completion.choices[0].message.content;
+    let responseContent;
+    try {
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4", // or whichever model you're using
+        messages: [
+          { 
+            role: "system", 
+            content: `You are a social media and content planning expert. 
+            Generate exactly the requested number of content suggestions for each platform:
+            ${platformRequests}.
+            
+            Strictly follow these scheduling guidelines for optimal engagement:
+            ${schedulingGuidance}
+            
+            IMPORTANT DISTRIBUTION GUIDELINE:
+            - For month or longer timeframes, evenly distribute posts across all weeks of the period
+            - Do not cluster posts at the beginning or end of the timeframe
+            - Aim for a balanced distribution throughout the entire period
+            
+            The content should be relevant to ${orgData.name}, a company in the ${
+              orgData.preferences?.industry || 'technology'
+            } industry. 
+            The content tone should be ${orgData.preferences?.contentTone || 'professional'}.
+            
+            Format your response as a valid JSON structure with an array of suggestions, each containing:
+            1. title - A compelling title for the post
+            2. description - A brief description or content summary
+            3. platform - The exact platform name from the user request
+            4. date - A specific date between ${format(startDate, 'yyyy-MM-dd')} and ${format(endDate, 'yyyy-MM-dd')} with time in 24h format (YYYY-MM-DD HH:MM)
+            5. reasonsData - An object with "reasons" array explaining why this content is suggested, and "aiConfidence" number between 0-1
+            
+            FOR X POSTS: Schedule only on Mondays and Tuesdays between 10:00 and 13:00.`
+          },
+          {
+            role: "user",
+            content: `Please create a content plan for the ${timeFrame} starting on ${format(startDate, 'yyyy-MM-dd')}. 
+            I need exactly: ${platformRequests}. 
+            ${customPrompt ? `Focus on these themes or topics: ${customPrompt}` : ''}
+            ${recentPosts && recentPosts.length > 0 ? `Recent posts for context: ${JSON.stringify(recentPosts)}` : ''}
+            
+            IMPORTANT: Please evenly distribute the posts across the entire ${timeFrame}, not clustering them at the beginning or end.
+            
+            Response should be valid JSON. Ensure each platform has exactly the number of posts specified.`
+          }
+        ],
+        temperature: 0.7,
+        // Remove the response_format parameter as it's not supported by the model you're using
+      });
+      
+      responseContent = completion.choices[0].message.content;
+    } catch (openaiError) {
+      console.error('OpenAI API error:', openaiError);
+      return NextResponse.json({ 
+        error: openaiError instanceof Error ? openaiError.message : 'Error connecting to AI service',
+        details: openaiError 
+      }, { status: 500 });
+    }
     
     // Parse JSON from the response
     let suggestions;
     try {
       // Find JSON in the response if it's wrapped in ```json or just parse directly
       const jsonMatch = responseContent?.match(/```json\s*([\s\S]*?)\s*```/) || 
-                       responseContent?.match(/```\s*([\s\S]*?)\s*```/);
+                      responseContent?.match(/```\s*([\s\S]*?)\s*```/);
       
       const jsonContent = jsonMatch ? jsonMatch[1] : responseContent;
       suggestions = JSON.parse(jsonContent || '{"suggestions":[]}');

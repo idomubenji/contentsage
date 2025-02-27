@@ -189,14 +189,40 @@ export default function PlannerModal({ isOpen, onClose, timeFrame, currentDate }
       });
       
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate plan');
+        // Safely handle both JSON and text error responses
+        let errorMessage = `Failed to generate plan: ${response.status} ${response.statusText}`;
+        
+        try {
+          // Try to parse as JSON first
+          const errorData = await response.json();
+          if (errorData.error) {
+            errorMessage = errorData.error;
+          }
+        } catch (parseError) {
+          // If JSON parsing fails, try to get the text content
+          try {
+            const textContent = await response.text();
+            console.error('Non-JSON error response:', textContent);
+            errorMessage = textContent || errorMessage;
+          } catch (textError) {
+            console.error('Failed to read error response:', textError);
+          }
+        }
+        
+        throw new Error(errorMessage);
       }
       
-      const data = await response.json();
+      // The response is OK, now try to parse the JSON
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        console.error('Error parsing JSON response:', jsonError);
+        throw new Error('Invalid response format from AI planner. Please try again.');
+      }
       
       if (!data.suggestions || !Array.isArray(data.suggestions)) {
-        throw new Error('Invalid response from AI planner');
+        throw new Error('Invalid response structure from AI planner');
       }
       
       setSuggestions(data.suggestions);
@@ -249,42 +275,39 @@ export default function PlannerModal({ isOpen, onClose, timeFrame, currentDate }
         }),
       });
       
-      // First check if the response is OK
+      // Check if the response is OK
       if (!response.ok) {
-        // Try to get error details from response
+        // Safely handle both JSON and text error responses
         let errorMessage = `Failed to save suggestions: ${response.status} ${response.statusText}`;
         
         try {
-          // Try to parse as JSON
+          // Try to parse as JSON first
           const errorData = await response.json();
           if (errorData.error) {
             errorMessage = errorData.error;
           }
         } catch (parseError) {
-          // If we can't parse as JSON, try to get text
+          // If JSON parsing fails, try to get the text content
           try {
             const textContent = await response.text();
             console.error('Non-JSON error response:', textContent);
-            
-            // Extract a meaningful message if possible
-            if (textContent.includes('<!DOCTYPE html>')) {
-              errorMessage = 'Server error occurred. Please try again or contact support.';
-            } else {
-              // Truncate if too long
-              errorMessage = textContent.length > 100 
-                ? textContent.substring(0, 100) + '...' 
-                : textContent;
-            }
+            errorMessage = textContent || errorMessage;
           } catch (textError) {
-            console.error('Failed to get response text:', textError);
+            console.error('Failed to read error response:', textError);
           }
         }
         
         throw new Error(errorMessage);
       }
       
-      // Now we know the response is OK, parse the JSON
-      const result = await response.json();
+      // Now we know the response is OK, safely parse the JSON
+      let result;
+      try {
+        result = await response.json();
+      } catch (jsonError) {
+        console.error('Error parsing JSON response:', jsonError);
+        throw new Error('Invalid response format. Please try again.');
+      }
       
       if (result.success) {
         // Success case
