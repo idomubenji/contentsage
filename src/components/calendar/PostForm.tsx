@@ -3,6 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import { format as dateFormat } from 'date-fns';
 import { useCalendar, Post } from './CalendarContext';
+import { downloadPostCalendar } from '@/utils/icsGenerator';
+import CalendarExportMenu from './CalendarExportMenu';
 
 interface PostFormProps {
   date: Date | null;
@@ -159,6 +161,14 @@ export default function PostForm({ date, post, onClose }: PostFormProps) {
     }
   };
 
+  // Download current post as .ics file
+  const handleDownloadICS = (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    if (post && post.posted_date) {
+      downloadPostCalendar(post);
+    }
+  };
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
       {/* Header */}
@@ -184,21 +194,31 @@ export default function PostForm({ date, post, onClose }: PostFormProps) {
 
       {/* Post status badge */}
       {post && (
-        <div className="mb-4">
+        <div className="mb-4 flex flex-wrap items-center gap-2">
           <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusBadgeClass()}`}>
             {post.status}
           </span>
           
           {post.format && (
-            <span className="ml-2 inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200">
               {post.format}
             </span>
           )}
           
           {post.platform && (
-            <span className="ml-2 inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
+            <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200">
               {post.platform}
             </span>
+          )}
+          
+          {/* Add calendar export menu */}
+          {post.posted_date && isViewMode && (
+            <CalendarExportMenu
+              type="post"
+              date={new Date(post.posted_date)}
+              posts={post}
+              className="ml-auto"
+            />
           )}
         </div>
       )}

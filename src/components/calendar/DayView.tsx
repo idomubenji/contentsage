@@ -5,6 +5,8 @@ import { format, set, isToday } from 'date-fns';
 import { useCalendar, Post } from './CalendarContext';
 import PostForm from './PostForm';
 import { getPlatformColors, getFormatColors } from './colorUtils';
+import { downloadDayCalendar } from '@/utils/icsGenerator';
+import CalendarExportMenu from './CalendarExportMenu';
 
 export default function DayView() {
   const { currentDate, getPostsForDate } = useCalendar();
@@ -33,9 +35,21 @@ export default function DayView() {
     setSelectedPost(null);
   };
 
+  // We'll keep this function for reference, but use the CalendarExportMenu component instead
+  const handleDownloadCalendar = () => {
+    const posts = getPostsForDate(currentDate);
+    downloadDayCalendar(posts, currentDate);
+  };
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow h-full flex flex-col w-full">
-      <div className="p-3 border-b dark:border-gray-700 w-full">
+      <div className="p-3 border-b dark:border-gray-700 w-full relative">
+        <CalendarExportMenu
+          type="day"
+          date={currentDate}
+          posts={getPostsForDate(currentDate)}
+          className="absolute right-3 top-3"
+        />
         <div className="text-center">
           <div className="text-lg text-gray-700 dark:text-gray-300">{format(currentDate, 'EEEE')}</div>
           <div className={`text-3xl font-bold ${isToday(currentDate) ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-900 dark:text-white'}`}>

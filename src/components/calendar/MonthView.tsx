@@ -16,6 +16,8 @@ import {
 import { useCalendar, Post } from './CalendarContext';
 import PostForm from './PostForm';
 import { getPlatformColors, getFormatColors } from './colorUtils';
+import { downloadMonthCalendar } from '@/utils/icsGenerator';
+import CalendarExportMenu from './CalendarExportMenu';
 
 // Function to get status badge styles
 const getStatusStyles = (status: string) => {
@@ -35,7 +37,8 @@ export default function MonthView() {
   const { 
     currentDate, 
     setCurrentDate, 
-    getPostsForDate, 
+    getPostsForDate,
+    getPostsForMonth,
     loading,
     error 
   } = useCalendar();
@@ -81,6 +84,12 @@ export default function MonthView() {
     setSelectedPost(null);
   };
 
+  // We'll keep this function for reference, but use the CalendarExportMenu component instead
+  const handleDownloadCalendar = () => {
+    const posts = getPostsForMonth(currentDate);
+    downloadMonthCalendar(posts, currentDate);
+  };
+
   if (loading) {
     return (
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow h-full w-full flex items-center justify-center">
@@ -106,6 +115,15 @@ export default function MonthView() {
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow h-full w-full flex flex-col">
+      <div className="p-2 relative">
+        <CalendarExportMenu 
+          type="month"
+          date={currentDate}
+          posts={getPostsForMonth(currentDate)}
+          className="absolute right-2 top-2"
+        />
+      </div>
+      
       <div className="p-2 flex-grow flex flex-col w-full">
         <div className="grid grid-cols-7 gap-1 mb-1 w-full">
           {weekDays.map((day) => (

@@ -17,6 +17,8 @@ import {
 import { useCalendar, Post } from './CalendarContext';
 import PostForm from './PostForm';
 import { getPlatformColors, getFormatColors } from './colorUtils';
+import { downloadWeekCalendar } from '@/utils/icsGenerator';
+import CalendarExportMenu from './CalendarExportMenu';
 
 export default function WeekView() {
   const { currentDate, getPostsForDate } = useCalendar();
@@ -54,11 +56,39 @@ export default function WeekView() {
     setShowPostForm(false);
     setSelectedPost(null);
   };
+  
+  // Get all posts for the week
+  const getPostsForWeek = () => {
+    const weekPosts: Post[] = [];
+    weekDays.forEach(day => {
+      const dayPosts = getPostsForDate(day);
+      weekPosts.push(...dayPosts);
+    });
+    
+    // Remove duplicates (if any) by creating a Map with post id as key
+    return Array.from(
+      new Map(weekPosts.map(post => [post.id, post])).values()
+    );
+  };
+
+  // We'll keep this function for reference, but use the CalendarExportMenu component instead
+  const handleDownloadCalendar = () => {
+    const uniquePosts = getPostsForWeek();
+    downloadWeekCalendar(uniquePosts, currentDate);
+  };
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-auto h-full w-full flex-1">
       <div className="sticky top-0 bg-white dark:bg-gray-800 z-10 w-full">
-        <div className="grid grid-cols-8 border-b dark:border-gray-700 w-full">
+        <div className="relative">
+          <CalendarExportMenu
+            type="week"
+            date={currentDate}
+            posts={getPostsForWeek()}
+            className="absolute right-2 top-2"
+          />
+        </div>
+        <div className="grid grid-cols-8 border-b dark:border-gray-700 w-full mt-10">
           <div className="p-2 border-r dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium"></div>
           {weekDays.map((day) => (
             <div 
