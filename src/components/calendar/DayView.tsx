@@ -9,7 +9,7 @@ import { downloadDayCalendar } from '@/utils/icsGenerator';
 import CalendarExportMenu from './CalendarExportMenu';
 
 export default function DayView() {
-  const { currentDate, getPostsForDate } = useCalendar();
+  const { currentDate, getPostsForDate, isExported } = useCalendar();
   const [selectedTime, setSelectedTime] = useState<Date | null>(null);
   const [showPostForm, setShowPostForm] = useState(false);
   const [selectedPost, setSelectedPost] = useState<Post | null>(null);
@@ -84,7 +84,7 @@ export default function DayView() {
                       <div 
                         key={post.id}
                         onClick={(e) => handlePostClick(e, post)}
-                        className={`p-2 rounded-md shadow-sm ${getPlatformColors(post.platform).bg} ${getPlatformColors(post.platform).darkBg} border-l-2 ${getFormatColors(post.format).border} ${getFormatColors(post.format).darkBorder}`}
+                        className={`p-2 rounded-md shadow-sm ${getPlatformColors(post.platform).bg} ${getPlatformColors(post.platform).darkBg} border-l-2 ${getFormatColors(post.format).border} ${getFormatColors(post.format).darkBorder} relative`}
                         title={`${post.title || 'Untitled'} - ${post.platform || 'Website'} - ${post.format || 'Article'}`}
                       >
                         <div className="font-medium text-gray-800 dark:text-gray-100">
@@ -93,6 +93,14 @@ export default function DayView() {
                         {post.description && (
                           <div className="text-gray-700 dark:text-gray-300 text-sm mt-1 line-clamp-2">
                             {post.description}
+                          </div>
+                        )}
+                        
+                        {/* Export indicator */}
+                        {isExported(post.id) && (
+                          <div className="absolute top-1 right-1 w-3 h-3 bg-green-500 rounded-full shadow-sm" 
+                                title="Added to calendar">
+                            <span className="sr-only">Added to calendar</span>
                           </div>
                         )}
                       </div>

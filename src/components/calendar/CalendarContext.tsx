@@ -1,9 +1,10 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import { startOfMonth, endOfMonth, eachDayOfInterval, format, parseISO } from 'date-fns';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
+import { startOfMonth, endOfMonth, eachDayOfInterval, format, parseISO, parse } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
+import { hasBeenExported, resetExportedEvents } from '@/utils/icsGenerator';
 
 export type CalendarViewType = 'day' | 'week' | 'month' | 'year';
 
@@ -37,6 +38,7 @@ interface CalendarContextType {
   getPostsForDate: (date: Date) => Post[];
   getPostsForMonth: (date: Date) => Post[];
   refreshPosts: () => Promise<void>;
+  isExported: (postId: string) => boolean;
 }
 
 const CalendarContext = createContext<CalendarContextType | undefined>(undefined);
@@ -49,13 +51,90 @@ export function useCalendar() {
   return context;
 }
 
+// Helper to get stored date from localStorage
+const getStoredDate = (): Date => {
+  // For server-side rendering, use a fixed date to prevent hydration errors
+  if (typeof window === 'undefined') {
+    // Use the first day of the current month to avoid date-specific issues
+    const now = new Date();
+    return new Date(now.getFullYear(), now.getMonth(), 1);
+  }
+  
+  try {
+    const storedDate = localStorage.getItem('calendarCurrentDate');
+    if (storedDate) {
+      return new Date(storedDate);
+    }
+  } catch (error) {
+    console.error('Error reading date from localStorage:', error);
+  }
+  
+  // For client-side with no stored date, use the first day of current month
+  // to maintain consistency with server-side rendering
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), 1);
+};
+
+// Helper to get stored view from localStorage
+const getStoredView = (): CalendarViewType => {
+  if (typeof window === 'undefined') return 'month';
+  
+  try {
+    const storedView = localStorage.getItem('calendarViewType') as CalendarViewType;
+    if (storedView && ['day', 'week', 'month', 'year'].includes(storedView)) {
+      return storedView;
+    }
+  } catch (error) {
+    console.error('Error reading view from localStorage:', error);
+  }
+  
+  return 'month';
+};
+
 export function CalendarProvider({ children }: { children: React.ReactNode }) {
-  const [currentDate, setCurrentDate] = useState<Date>(new Date());
-  const [view, setView] = useState<CalendarViewType>('month');
+  const [hydrated, setHydrated] = useState(false);
+  const [currentDate, setCurrentDateState] = useState<Date>(getStoredDate());
+  const [view, setViewState] = useState<CalendarViewType>(getStoredView());
   const [posts, setPosts] = useState<Post[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [lastRefresh, setLastRefresh] = useState<number>(Date.now());
   const { user } = useAuth();
+
+  // Handle hydration mismatch by waiting for client-side render
+  useEffect(() => {
+    setHydrated(true);
+  }, []);
+
+  // Override setCurrentDate to also persist to localStorage
+  const setCurrentDate = (date: Date) => {
+    // Normalize date by setting it to midnight to avoid time-based issues
+    const normalizedDate = new Date(date);
+    normalizedDate.setHours(0, 0, 0, 0);
+    
+    setCurrentDateState(normalizedDate);
+    
+    try {
+      localStorage.setItem('calendarCurrentDate', normalizedDate.toISOString());
+    } catch (error) {
+      console.error('Error writing date to localStorage:', error);
+    }
+  };
+
+  // Override setView to also persist to localStorage
+  const setView = (newView: CalendarViewType) => {
+    setViewState(newView);
+    try {
+      localStorage.setItem('calendarViewType', newView);
+    } catch (error) {
+      console.error('Error writing view to localStorage:', error);
+    }
+  };
+
+  // Check if a post has been exported
+  const isExported = (postId: string): boolean => {
+    return hasBeenExported(postId);
+  };
 
   // Fetch posts from Supabase
   const fetchPosts = async () => {
@@ -91,6 +170,8 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
       })) || [];
       
       setPosts(postsWithColors);
+      // Update last refresh timestamp
+      setLastRefresh(Date.now());
     } catch (err: any) {
       console.error('Error fetching posts for calendar:', err);
       setError(err.message || 'Failed to fetch posts');
@@ -102,7 +183,45 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
   // Fetch posts on initial load and when user changes
   useEffect(() => {
     fetchPosts();
+    
+    // Reset exported events tracking when view changes
+    return () => {
+      resetExportedEvents();
+    };
   }, [user]);
+  
+  // Setup auto-refresh every 2 minutes to keep calendar in sync
+  // But only refresh if not loading and no user interaction in the last 10 seconds
+  useEffect(() => {
+    let lastUserInteraction = Date.now();
+    
+    // Track user interactions
+    const trackInteraction = () => {
+      lastUserInteraction = Date.now();
+    };
+    
+    // Add event listeners to track user activity
+    window.addEventListener('mousemove', trackInteraction);
+    window.addEventListener('click', trackInteraction);
+    window.addEventListener('keydown', trackInteraction);
+    
+    const refreshInterval = setInterval(() => {
+      if (!loading) {
+        // Only refresh if user hasn't interacted in the last 10 seconds
+        const inactiveTime = Date.now() - lastUserInteraction;
+        if (inactiveTime > 10000) { // 10 seconds of inactivity
+          fetchPosts();
+        }
+      }
+    }, 120000); // 2 minutes
+    
+    return () => {
+      clearInterval(refreshInterval);
+      window.removeEventListener('mousemove', trackInteraction);
+      window.removeEventListener('click', trackInteraction);
+      window.removeEventListener('keydown', trackInteraction);
+    };
+  }, [loading]);
 
   const addPost = async (post: Omit<Post, 'id'>) => {
     if (!user) {
@@ -259,10 +378,29 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
         deletePost,
         getPostsForDate,
         getPostsForMonth,
-        refreshPosts: fetchPosts
+        refreshPosts: fetchPosts,
+        isExported
       }}
     >
-      {children}
+      {hydrated ? (
+        children
+      ) : (
+        <div suppressHydrationWarning>
+          {/* This div will be replaced after hydration */}
+          <div className="h-full w-full flex items-center justify-center p-10">
+            <div className="animate-pulse flex space-x-4">
+              <div className="rounded-full bg-gray-200 dark:bg-gray-700 h-12 w-12"></div>
+              <div className="flex-1 space-y-4 py-1">
+                <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
+                <div className="space-y-2">
+                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded"></div>
+                  <div className="h-4 bg-gray-200 dark:bg-gray-700 rounded w-5/6"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </CalendarContext.Provider>
   );
 } 

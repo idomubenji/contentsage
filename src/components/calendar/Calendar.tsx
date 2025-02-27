@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   addMonths, 
   subMonths, 
@@ -22,6 +22,14 @@ import PlannerModal from './PlannerModal';
 export default function Calendar() {
   const { currentDate, setCurrentDate, view, setView } = useCalendar();
   const [isPlannerOpen, setIsPlannerOpen] = useState(false);
+  
+  // Effect to sync with URL params (optional enhancement for sharable links)
+  useEffect(() => {
+    // Only update document title on the client-side
+    if (typeof window !== 'undefined') {
+      document.title = `Calendar - ${format(currentDate, 'MMMM yyyy')} - ContentSage`;
+    }
+  }, [currentDate, view]);
   
   const navigateCalendar = (direction: 'prev' | 'next') => {
     if (direction === 'prev') {
@@ -63,15 +71,18 @@ export default function Calendar() {
   
   // Format the header title based on the current view
   const getHeaderTitle = () => {
+    // Use consistent options object to ensure consistent formatting between server and client
+    const formatOptions = { locale: undefined };
+    
     switch (view) {
       case 'day':
-        return format(currentDate, 'MMMM d, yyyy');
+        return format(currentDate, 'MMMM d, yyyy', formatOptions);
       case 'week':
-        return `Week of ${format(currentDate, 'MMMM d, yyyy')}`;
+        return `Week of ${format(currentDate, 'MMMM d, yyyy', formatOptions)}`;
       case 'month':
-        return format(currentDate, 'MMMM yyyy');
+        return format(currentDate, 'MMMM yyyy', formatOptions);
       case 'year':
-        return format(currentDate, 'yyyy');
+        return format(currentDate, 'yyyy', formatOptions);
       default:
         return '';
     }
@@ -147,7 +158,7 @@ export default function Calendar() {
               </svg>
             </button>
             
-            <h2 className="text-xl font-semibold mx-2 w-52 text-center text-gray-800 dark:text-white">
+            <h2 className="text-xl font-semibold mx-2 w-52 text-center text-gray-800 dark:text-white" suppressHydrationWarning>
               {getHeaderTitle()}
             </h2>
             

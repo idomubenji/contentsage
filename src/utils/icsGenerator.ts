@@ -93,6 +93,30 @@ METHOD:PUBLISH
 ${eventsContent}END:VCALENDAR`;
 }
 
+// Store a local cache of exported events to avoid duplicates
+let exportedEvents: Record<string, boolean> = {};
+
+/**
+ * Reset the exported events cache
+ */
+export function resetExportedEvents(): void {
+  exportedEvents = {};
+}
+
+/**
+ * Track an exported event to prevent duplicates
+ */
+export function trackExportedEvent(eventId: string): void {
+  exportedEvents[eventId] = true;
+}
+
+/**
+ * Check if an event has been exported
+ */
+export function hasBeenExported(eventId: string): boolean {
+  return !!exportedEvents[eventId];
+}
+
 /**
  * Download an iCalendar file with the given filename and content
  */
@@ -124,6 +148,9 @@ export function downloadPostCalendar(post: Post): void {
   const safeName = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30);
   const filename = `content-${safeName}.ics`;
   
+  // Track this post as exported
+  trackExportedEvent(post.id);
+  
   const content = generateICSForPost(post);
   downloadICS(filename, content);
 }
@@ -134,6 +161,9 @@ export function downloadPostCalendar(post: Post): void {
 export function downloadMonthCalendar(posts: Post[], date: Date): void {
   const monthName = formatDate(date, 'yyyy-MMM').toLowerCase();
   const filename = `content-calendar-${monthName}.ics`;
+  
+  // Track all posts as exported
+  posts.forEach(post => trackExportedEvent(post.id));
   
   const content = generateICSForPosts(posts);
   downloadICS(filename, content);
@@ -146,6 +176,9 @@ export function downloadWeekCalendar(posts: Post[], date: Date): void {
   const weekName = formatDate(date, 'yyyy-MMM-dd').toLowerCase();
   const filename = `content-week-${weekName}.ics`;
   
+  // Track all posts as exported
+  posts.forEach(post => trackExportedEvent(post.id));
+  
   const content = generateICSForPosts(posts);
   downloadICS(filename, content);
 }
@@ -156,6 +189,9 @@ export function downloadWeekCalendar(posts: Post[], date: Date): void {
 export function downloadDayCalendar(posts: Post[], date: Date): void {
   const dayName = formatDate(date, 'yyyy-MM-dd').toLowerCase();
   const filename = `content-day-${dayName}.ics`;
+  
+  // Track all posts as exported
+  posts.forEach(post => trackExportedEvent(post.id));
   
   const content = generateICSForPosts(posts);
   downloadICS(filename, content);
@@ -181,6 +217,9 @@ export function generateGoogleCalendarUrl(post: Post): string {
     `${post.description || ''}\n\nURL: ${post.url || ''}\nStatus: ${post.status || ''}\nFormat: ${post.format || ''}`
   );
   
+  // Track this post as exported
+  trackExportedEvent(post.id);
+  
   return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startDate}/${endDate}&details=${description}`;
 }
 
@@ -196,6 +235,9 @@ export function generateGoogleCalendarUrlForPosts(posts: Post[], date: Date): st
   if (postsWithDates.length === 0) {
     return '';
   }
+  
+  // Track all posts as exported
+  postsWithDates.forEach(post => trackExportedEvent(post.id));
   
   // If there's only one post, just use the regular function
   if (postsWithDates.length === 1) {

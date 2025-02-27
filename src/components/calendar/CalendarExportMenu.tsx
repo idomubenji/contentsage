@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useEffect } from 'react';
-import { Post } from './CalendarContext';
+import { Post, useCalendar } from './CalendarContext';
 import { 
   downloadICS, 
   downloadPostCalendar, 
@@ -21,7 +21,9 @@ interface CalendarExportMenuProps {
 
 export default function CalendarExportMenu({ type, date, posts, className = '' }: CalendarExportMenuProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [notification, setNotification] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const { refreshPosts } = useCalendar();
   
   // Close menu when clicking outside
   useEffect(() => {
@@ -37,31 +39,63 @@ export default function CalendarExportMenu({ type, date, posts, className = '' }
     };
   }, []);
   
+  // Auto-hide notification after 3 seconds
+  useEffect(() => {
+    if (notification) {
+      const timer = setTimeout(() => {
+        setNotification(null);
+      }, 3000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [notification]);
+  
+  const showNotification = (message: string) => {
+    setNotification(message);
+    // Refresh posts to ensure calendar is updated in real-time
+    refreshPosts();
+  };
+  
   const handleDownload = () => {
-    if (type === 'post' && !Array.isArray(posts)) {
-      downloadPostCalendar(posts);
-    } else if (type === 'day' && Array.isArray(posts)) {
-      downloadDayCalendar(posts, date);
-    } else if (type === 'week' && Array.isArray(posts)) {
-      downloadWeekCalendar(posts, date);
-    } else if (type === 'month' && Array.isArray(posts)) {
-      downloadMonthCalendar(posts, date);
+    try {
+      if (type === 'post' && !Array.isArray(posts)) {
+        downloadPostCalendar(posts);
+        showNotification('Event successfully exported to .ics file');
+      } else if (type === 'day' && Array.isArray(posts)) {
+        downloadDayCalendar(posts, date);
+        showNotification('Day events successfully exported to .ics file');
+      } else if (type === 'week' && Array.isArray(posts)) {
+        downloadWeekCalendar(posts, date);
+        showNotification('Week events successfully exported to .ics file');
+      } else if (type === 'month' && Array.isArray(posts)) {
+        downloadMonthCalendar(posts, date);
+        showNotification('Month events successfully exported to .ics file');
+      }
+    } catch (error) {
+      setNotification('Error exporting calendar');
+      console.error('Error exporting calendar:', error);
     }
     
     setIsOpen(false);
   };
   
   const handleGoogleCalendar = () => {
-    let url = '';
-    
-    if (type === 'post' && !Array.isArray(posts)) {
-      url = generateGoogleCalendarUrl(posts);
-    } else if (Array.isArray(posts)) {
-      url = generateGoogleCalendarUrlForPosts(posts, date);
-    }
-    
-    if (url) {
-      window.open(url, '_blank');
+    try {
+      let url = '';
+      
+      if (type === 'post' && !Array.isArray(posts)) {
+        url = generateGoogleCalendarUrl(posts);
+      } else if (Array.isArray(posts)) {
+        url = generateGoogleCalendarUrlForPosts(posts, date);
+      }
+      
+      if (url) {
+        window.open(url, '_blank');
+        showNotification('Opening in Google Calendar');
+      }
+    } catch (error) {
+      setNotification('Error opening Google Calendar');
+      console.error('Error opening Google Calendar:', error);
     }
     
     setIsOpen(false);
@@ -87,6 +121,16 @@ export default function CalendarExportMenu({ type, date, posts, className = '' }
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
         </svg>
       </button>
+      
+      {/* Success notification */}
+      {notification && (
+        <div className="absolute top-full left-0 mt-2 bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-100 px-3 py-2 rounded-md text-sm z-20 shadow-md flex items-center gap-2 min-w-[220px]">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+          </svg>
+          {notification}
+        </div>
+      )}
       
       {isOpen && (
         <div className="absolute left-0 mt-1 w-56 rounded-md shadow-lg bg-white dark:bg-gray-800 z-10 border border-gray-200 dark:border-gray-700">

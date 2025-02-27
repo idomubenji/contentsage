@@ -102,6 +102,11 @@ export async function POST(request: NextRequest) {
           Strictly follow these scheduling guidelines for optimal engagement:
           ${schedulingGuidance}
           
+          IMPORTANT DISTRIBUTION GUIDELINE:
+          - For month or longer timeframes, evenly distribute posts across all weeks of the period
+          - Do not cluster posts at the beginning or end of the timeframe
+          - Aim for a balanced distribution throughout the entire period
+          
           The content should be relevant to ${orgData.name}, a company in the ${
             orgData.preferences?.industry || 'technology'
           } industry. 
@@ -122,6 +127,8 @@ export async function POST(request: NextRequest) {
           I need exactly: ${platformRequests}. 
           ${customPrompt ? `Focus on these themes or topics: ${customPrompt}` : ''}
           ${recentPosts && recentPosts.length > 0 ? `Recent posts for context: ${JSON.stringify(recentPosts)}` : ''}
+          
+          IMPORTANT: Please evenly distribute the posts across the entire ${timeFrame}, not clustering them at the beginning or end.
           
           Response should be valid JSON. Ensure each platform has exactly the number of posts specified.`
         }
@@ -185,6 +192,7 @@ function verifyAndAdjustSuggestions(
   // Count suggestions by platform
   const platformCounts: Record<string, number> = {};
   const platformRequestedCounts: Record<string, number> = {};
+  const totalDays = Math.ceil((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24));
   
   // Create a map of requested counts
   platformSettings.forEach(p => {
@@ -192,8 +200,33 @@ function verifyAndAdjustSuggestions(
     platformCounts[p.platform] = 0;
   });
   
+  // Get total posts count to evenly distribute
+  const totalPostsCount = platformSettings.reduce((sum, p) => sum + p.count, 0);
+  
+  // Create day buckets for distributing posts
+  // We'll divide the date range into segments based on the number of posts
+  // This ensures posts are distributed evenly throughout the period
+  const dayBuckets: Date[] = [];
+  
+  if (totalPostsCount > 0) {
+    // Calculate how many days per post for even distribution
+    const daysPerPost = Math.max(1, Math.floor(totalDays / totalPostsCount));
+    
+    // Create evenly spaced day buckets
+    for (let i = 0; i < totalPostsCount; i++) {
+      // Calculate the day within the range, ensuring more even distribution
+      const dayOffset = Math.min(
+        totalDays - 1, 
+        Math.floor(i * totalDays / totalPostsCount) + 
+        Math.floor(Math.random() * Math.min(daysPerPost, 3)) // Add small randomness within the bucket
+      );
+      
+      dayBuckets.push(addDays(startDate, dayOffset));
+    }
+  }
+  
   // Process and validate each suggestion
-  const processedSuggestions = suggestions.map(suggestion => {
+  const processedSuggestions = suggestions.map((suggestion, index) => {
     // Ensure suggestion has all required fields
     const processed = {
       ...suggestion,
@@ -212,13 +245,35 @@ function verifyAndAdjustSuggestions(
         // Try to parse the date
         postDate = new Date(suggestion.date);
         
-        // If the date is invalid, set a fallback
+        // If the date is invalid, use evenly distributed date from buckets
         if (isNaN(postDate.getTime())) {
-          postDate = addDays(startDate, Math.floor(Math.random() * 30));
+          // Get an appropriate day from our buckets if available
+          if (dayBuckets.length > 0) {
+            // Use modulo to cycle through available buckets if we have more posts than buckets
+            const bucketIndex = index % dayBuckets.length;
+            postDate = dayBuckets[bucketIndex];
+          } else {
+            // Fallback to evenly distributed dates if buckets aren't available
+            const dayOffset = Math.min(
+              totalDays - 1, 
+              Math.floor(index * totalDays / Math.max(1, suggestions.length))
+            );
+            postDate = addDays(startDate, dayOffset);
+          }
         }
       } else {
-        // If no date provided, set a fallback
-        postDate = addDays(startDate, Math.floor(Math.random() * 30));
+        // If no date provided, use evenly distributed date from buckets
+        if (dayBuckets.length > 0) {
+          const bucketIndex = index % dayBuckets.length;
+          postDate = dayBuckets[bucketIndex];
+        } else {
+          // Fallback to evenly distributed dates
+          const dayOffset = Math.min(
+            totalDays - 1, 
+            Math.floor(index * totalDays / Math.max(1, suggestions.length))
+          );
+          postDate = addDays(startDate, dayOffset);
+        }
       }
       
       // Special handling for X (Twitter) posts - enforce Monday/Tuesday schedule
@@ -244,8 +299,14 @@ function verifyAndAdjustSuggestions(
       processed.posted_date = format(postDate, "yyyy-MM-dd'T'HH:mm:ss");
     } catch (error) {
       console.error('Error processing date:', error);
-      processed.date = format(addDays(startDate, Math.floor(Math.random() * 30)), "yyyy-MM-dd'T'HH:mm:ss");
-      processed.posted_date = format(addDays(startDate, Math.floor(Math.random() * 30)), "yyyy-MM-dd'T'HH:mm:ss");
+      // Use evenly distributed fallback date
+      const dayOffset = Math.min(
+        totalDays - 1, 
+        Math.floor(index * totalDays / Math.max(1, suggestions.length))
+      );
+      const fallbackDate = addDays(startDate, dayOffset);
+      processed.date = format(fallbackDate, "yyyy-MM-dd'T'HH:mm:ss");
+      processed.posted_date = format(fallbackDate, "yyyy-MM-dd'T'HH:mm:ss");
     }
     
     // Ensure reasonsData exists
@@ -263,6 +324,8 @@ function verifyAndAdjustSuggestions(
   });
   
   // Add additional posts if we don't have enough for any platform
+  const additionalSuggestions: any[] = [];
+  
   Object.entries(platformRequestedCounts).forEach(([platform, requestedCount]) => {
     const currentCount = platformCounts[platform] || 0;
     if (currentCount < requestedCount) {
@@ -270,32 +333,37 @@ function verifyAndAdjustSuggestions(
       for (let i = 0; i < (requestedCount - currentCount); i++) {
         let postDate;
         
+        // Determine proper spacing for additional posts
+        const existingPlatformPosts = processedSuggestions.filter(p => p.platform === platform).length;
+        const totalPlatformPosts = existingPlatformPosts + (requestedCount - currentCount);
+        
+        // Calculate evenly distributed date for this additional post
+        const postIndex = existingPlatformPosts + i;
+        const dayOffset = Math.min(
+          totalDays - 1, 
+          Math.floor(postIndex * totalDays / Math.max(1, totalPlatformPosts))
+        );
+        postDate = addDays(startDate, dayOffset);
+        
         // Special scheduling for X (Twitter)
         if (platform === '𝕏' || platform === 'X') {
           // Find a Monday or Tuesday
-          const baseDate = addDays(startDate, i * 2); // Spread them out
-          const dayOfWeek = getDay(baseDate);
-          
-          if (dayOfWeek === 1 || dayOfWeek === 2) { // Monday or Tuesday
-            postDate = baseDate;
-          } else {
+          if (!isMonday(postDate) && !isTuesday(postDate)) {
+            const dayOfWeek = getDay(postDate);
             const daysUntilMonday = dayOfWeek === 0 ? 1 : 8 - dayOfWeek;
-            postDate = addDays(baseDate, daysUntilMonday);
+            postDate = addDays(postDate, daysUntilMonday);
           }
           
           // Set time between 10 AM and 1 PM
           const hour = 10 + Math.floor(Math.random() * 3);
           const minute = Math.floor(Math.random() * 60);
           postDate = setHours(setMinutes(postDate, minute), hour);
-        } else {
-          // For other platforms, just space them out
-          postDate = addDays(startDate, i * 3 + Math.floor(Math.random() * 3));
         }
         
         // Ensure date is within range
         if (postDate > endDate) postDate = endDate;
         
-        processedSuggestions.push({
+        additionalSuggestions.push({
           title: `${platform} Content ${i + 1}`,
           description: `Suggested content for ${platform}`,
           platform: platform,
@@ -303,16 +371,14 @@ function verifyAndAdjustSuggestions(
           posted_date: format(postDate, "yyyy-MM-dd'T'HH:mm:ss"),
           status: 'SUGGESTED',
           format: platform === 'Web' ? 'blog' : 'social',
-          seo_info: {
-            reasonsData: {
-              reasons: ['Added to fulfill your requested content plan'],
-              aiConfidence: 0.7
-            }
+          reasonsData: {
+            reasons: ['Added to fulfill your requested content plan'],
+            aiConfidence: 0.7
           }
         });
       }
     }
   });
   
-  return processedSuggestions;
+  return [...processedSuggestions, ...additionalSuggestions];
 } 

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { format } from 'date-fns';
-import { CalendarViewType } from './CalendarContext';
+import { CalendarViewType, useCalendar } from './CalendarContext';
 import { useAuth } from '../../lib/auth-context';
 import { supabase } from '../../lib/supabase';
 
@@ -42,6 +42,9 @@ interface Organization {
 export default function PlannerModal({ isOpen, onClose, timeFrame, currentDate }: PlannerModalProps) {
   // Custom prompt state
   const [customPrompt, setCustomPrompt] = useState('');
+  
+  // Get calendar context for refreshing posts
+  const { refreshPosts } = useCalendar();
   
   // Loading states
   const [isLoading, setIsLoading] = useState(false);
@@ -286,6 +289,10 @@ export default function PlannerModal({ isOpen, onClose, timeFrame, currentDate }
       if (result.success) {
         // Success case
         console.log(`Successfully saved ${result.count} suggestions`);
+        
+        // Refresh calendar posts to show new suggestions immediately
+        await refreshPosts();
+        
         // Close the modal after saving
         onClose();
       } else {
