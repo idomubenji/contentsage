@@ -386,23 +386,30 @@ function extractInfoFromHtml(html: string, url: string) {
   } 
   // Check for infographic content
   else if (
+    // Explicit infographic mentions - higher confidence indicators
     document.querySelectorAll('.infographic, [class*="infographic"], img[alt*="infographic" i]').length > 0 ||
-    url.includes('infographic') ||
+    url.toLowerCase().includes('infographic') ||
     title.toLowerCase().includes('infographic') ||
-    // Look for data visualization elements
-    document.querySelectorAll('.data-viz, [class*="dataviz"], [class*="chart"], [class*="graph"], .visualization').length > 0 ||
-    // Check for single prominent image with dimensions indicating infographic (tall/narrow)
-    document.querySelectorAll('img[width][height]').length > 0 && Array.from(document.querySelectorAll('img[width][height]')).some(img => {
-      const w = parseInt(img.getAttribute('width') || '0');
-      const h = parseInt(img.getAttribute('height') || '0');
-      return w > 0 && h > 0 && h > w * 1.5; // Height is significantly larger than width
-    }) ||
-    // Check for SVG graphs
-    document.querySelectorAll('svg').length > 0 ||
-    // Pinterest often contains infographics
-    platform === 'Pinterest' ||
-    // Check meta tags
-    document.querySelector('meta[property*="image"][content*="infographic"]') !== null
+    document.querySelector('meta[property*="image"][content*="infographic"]') !== null ||
+    
+    // Secondary indicators - only count if content explicitly mentions infographics
+    (document.querySelector('article, .post, .entry, .content') && 
+     document.querySelector('article, .post, .entry, .content')?.textContent?.toLowerCase().includes('infographic') &&
+     (
+       // Look for data visualization elements with explicit infographic mention in content
+       document.querySelectorAll('.data-viz, [class*="dataviz"], [class*="chart"], [class*="graph"], .visualization').length > 0 ||
+       // Pinterest often contains infographics, but only mark as infographic if explicitly mentioned
+       platform === 'Pinterest' ||
+       // Check for SVG graphs within content that mentions infographics
+       document.querySelectorAll('svg').length > 0 ||
+       // Tall/narrow images only if content explicitly mentions infographics
+       document.querySelectorAll('img[width][height]').length > 0 && Array.from(document.querySelectorAll('img[width][height]')).some(img => {
+         const w = parseInt(img.getAttribute('width') || '0');
+         const h = parseInt(img.getAttribute('height') || '0');
+         return w > 0 && h > 0 && h > w * 2; // Stricter ratio: height more than double the width
+       })
+     )
+    )
   ) {
     format = 'infographic';
     hasInfographic = true; // Always true for infographic format
@@ -647,24 +654,34 @@ function extractInfoFromHtml(html: string, url: string) {
     
     // Now check for infographics in social posts after we have socialContent
     if (
-      // Look for image with infographic in class name or alt text
+      // Explicit infographic mentions - high confidence indicators
       document.querySelectorAll('.infographic, [class*="infographic"], img[alt*="infographic" i]').length > 0 ||
-      // Look for data visualization elements
-      document.querySelectorAll('.data-viz, [class*="dataviz"], [class*="chart"], [class*="graph"], .visualization').length > 0 ||
-      // Look for SVG elements (common in infographics)
-      document.querySelectorAll('svg[width][height]').length > 0 && Array.from(document.querySelectorAll('svg[width][height]')).some(svg => {
-        const w = parseInt(svg.getAttribute('width') || '0');
-        const h = parseInt(svg.getAttribute('height') || '0');
-        return w > 100 && h > 100; // Meaningful size for a visualization
-      }) ||
-      // Check for Pinterest content
-      platform === 'Pinterest' ||
-      // Check post content for infographic indicators
+      
+      // Only consider these indicators if content explicitly mentions infographics
+      (socialContent && socialContent.toLowerCase().includes('infographic') && 
+       (
+         // Look for data visualization elements
+         document.querySelectorAll('.data-viz, [class*="dataviz"], [class*="chart"], [class*="graph"], .visualization').length > 0 ||
+         // Look for SVG elements (common in infographics)
+         document.querySelectorAll('svg[width][height]').length > 0 && Array.from(document.querySelectorAll('svg[width][height]')).some(svg => {
+           const w = parseInt(svg.getAttribute('width') || '0');
+           const h = parseInt(svg.getAttribute('height') || '0');
+           return w > 100 && h > 100; // Meaningful size for a visualization
+         }) ||
+         // Check for Pinterest content
+         platform === 'Pinterest'
+       )
+      ) ||
+      
+      // Check post content for very explicit infographic indicators
       (socialContent && (
-        socialContent.toLowerCase().includes('infographic') ||
-        socialContent.toLowerCase().includes('data visualization') ||
-        socialContent.toLowerCase().includes('chart') ||
-        socialContent.toLowerCase().includes('graph')
+        // Direct mention of infographic
+        socialContent.toLowerCase().includes('infographic') &&
+        // Must also be paired with relevant terms
+        (socialContent.toLowerCase().includes('visual') || 
+         socialContent.toLowerCase().includes('data visualization') ||
+         socialContent.toLowerCase().includes('chart') ||
+         socialContent.toLowerCase().includes('graph'))
       ))
     ) {
       hasInfographic = true;

@@ -14,13 +14,15 @@ import {
   parseISO,
   set
 } from 'date-fns';
-import { useCalendar } from './CalendarContext';
+import { useCalendar, Post } from './CalendarContext';
 import PostForm from './PostForm';
+import { getPlatformColors, getFormatColors } from './colorUtils';
 
 export default function WeekView() {
   const { currentDate, getPostsForDate } = useCalendar();
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [showPostForm, setShowPostForm] = useState(false);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
   // Get start and end of the week
   const weekStart = startOfWeek(currentDate);
@@ -38,11 +40,19 @@ export default function WeekView() {
   const handleTimeSlotClick = (day: Date, hour: number) => {
     const newDate = set(day, { hours: hour, minutes: 0, seconds: 0, milliseconds: 0 });
     setSelectedDate(newDate);
+    setSelectedPost(null);
+    setShowPostForm(true);
+  };
+
+  const handlePostClick = (e: React.MouseEvent, post: Post) => {
+    e.stopPropagation(); // Prevent triggering the time slot click
+    setSelectedPost(post);
     setShowPostForm(true);
   };
 
   const closePostForm = () => {
     setShowPostForm(false);
+    setSelectedPost(null);
   };
 
   return (
@@ -76,10 +86,7 @@ export default function WeekView() {
             
             {weekDays.map((day) => {
               const timeSlotDate = set(day, { hours: hour });
-              const posts = getPostsForDate(timeSlotDate).filter(post => {
-                const postHour = new Date(post.date).getHours();
-                return postHour === hour;
-              });
+              const posts = getPostsForDate(day);
               
               return (
                 <div 
@@ -94,11 +101,14 @@ export default function WeekView() {
                   {posts.map((post) => (
                     <div 
                       key={post.id}
-                      className="text-xs p-1.5 rounded mb-1 shadow-sm"
-                      style={{ backgroundColor: `${post.color}20`, color: post.color, borderLeft: `3px solid ${post.color}` }}
+                      onClick={(e) => handlePostClick(e, post)}
+                      className={`text-xs p-1.5 rounded mb-1 shadow-sm border-l-2 ${getPlatformColors(post.platform).bg} ${getPlatformColors(post.platform).darkBg} ${getFormatColors(post.format).border} ${getFormatColors(post.format).darkBorder}`}
+                      title={`${post.title || 'Untitled'} - ${post.platform || 'Website'} - ${post.format || 'Article'}`}
                     >
-                      <div className="font-medium truncate">{post.title}</div>
-                      <div className="truncate">{post.content}</div>
+                      <div className="font-medium truncate text-gray-800 dark:text-gray-100">{post.title || 'Untitled Post'}</div>
+                      {post.description && (
+                        <div className="truncate text-gray-700 dark:text-gray-300">{post.description}</div>
+                      )}
                     </div>
                   ))}
                   
@@ -110,9 +120,13 @@ export default function WeekView() {
         ))}
       </div>
 
-      {showPostForm && selectedDate && (
+      {showPostForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50">
-          <PostForm date={selectedDate} onClose={closePostForm} />
+          <PostForm 
+            date={selectedDate} 
+            post={selectedPost}
+            onClose={closePostForm} 
+          />
         </div>
       )}
     </div>

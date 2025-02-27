@@ -2,13 +2,15 @@
 
 import React, { useState } from 'react';
 import { format, set, isToday } from 'date-fns';
-import { useCalendar } from './CalendarContext';
+import { useCalendar, Post } from './CalendarContext';
 import PostForm from './PostForm';
+import { getPlatformColors, getFormatColors } from './colorUtils';
 
 export default function DayView() {
   const { currentDate, getPostsForDate } = useCalendar();
   const [selectedTime, setSelectedTime] = useState<Date | null>(null);
   const [showPostForm, setShowPostForm] = useState(false);
+  const [selectedPost, setSelectedPost] = useState<Post | null>(null);
 
   // Time slots for the day (from 6 AM to 9 PM)
   const timeSlots = Array.from({ length: 16 }, (_, i) => i + 6);
@@ -16,11 +18,19 @@ export default function DayView() {
   const handleTimeSlotClick = (hour: number) => {
     const newDate = set(currentDate, { hours: hour, minutes: 0, seconds: 0, milliseconds: 0 });
     setSelectedTime(newDate);
+    setSelectedPost(null);
+    setShowPostForm(true);
+  };
+
+  const handlePostClick = (e: React.MouseEvent, post: Post) => {
+    e.stopPropagation(); // Prevent triggering the time slot click
+    setSelectedPost(post);
     setShowPostForm(true);
   };
 
   const closePostForm = () => {
     setShowPostForm(false);
+    setSelectedPost(null);
   };
 
   return (
@@ -37,10 +47,7 @@ export default function DayView() {
       <div className="overflow-auto flex-1 w-full">
         {timeSlots.map((hour) => {
           const timeSlotDate = set(currentDate, { hours: hour });
-          const posts = getPostsForDate(timeSlotDate).filter(post => {
-            const postHour = new Date(post.date).getHours();
-            return postHour === hour;
-          });
+          const posts = getPostsForDate(currentDate);
           
           return (
             <div 
@@ -62,18 +69,18 @@ export default function DayView() {
                     {posts.map((post) => (
                       <div 
                         key={post.id}
-                        className="p-2 rounded shadow-sm"
-                        style={{ 
-                          backgroundColor: `${post.color}20`, 
-                          borderLeft: `3px solid ${post.color}` 
-                        }}
+                        onClick={(e) => handlePostClick(e, post)}
+                        className={`p-2 rounded-md shadow-sm ${getPlatformColors(post.platform).bg} ${getPlatformColors(post.platform).darkBg} border-l-2 ${getFormatColors(post.format).border} ${getFormatColors(post.format).darkBorder}`}
+                        title={`${post.title || 'Untitled'} - ${post.platform || 'Website'} - ${post.format || 'Article'}`}
                       >
-                        <div className="font-medium" style={{ color: post.color }}>
-                          {post.title}
+                        <div className="font-medium text-gray-800 dark:text-gray-100">
+                          {post.title || 'Untitled Post'}
                         </div>
-                        <div className="text-gray-700 dark:text-gray-300 text-sm mt-1">
-                          {post.content}
-                        </div>
+                        {post.description && (
+                          <div className="text-gray-700 dark:text-gray-300 text-sm mt-1 line-clamp-2">
+                            {post.description}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
@@ -84,9 +91,13 @@ export default function DayView() {
         })}
       </div>
 
-      {showPostForm && selectedTime && (
+      {showPostForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 dark:bg-opacity-70 flex items-center justify-center z-50">
-          <PostForm date={selectedTime} onClose={closePostForm} />
+          <PostForm 
+            date={selectedTime} 
+            post={selectedPost}
+            onClose={closePostForm} 
+          />
         </div>
       )}
     </div>

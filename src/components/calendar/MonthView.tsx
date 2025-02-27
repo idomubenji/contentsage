@@ -15,6 +15,21 @@ import {
 } from 'date-fns';
 import { useCalendar, Post } from './CalendarContext';
 import PostForm from './PostForm';
+import { getPlatformColors, getFormatColors } from './colorUtils';
+
+// Function to get status badge styles
+const getStatusStyles = (status: string) => {
+  switch (status) {
+    case 'POSTED':
+      return { bg: 'bg-green-100 dark:bg-green-900', text: 'text-green-800 dark:text-green-200' };
+    case 'SCHEDULED':
+      return { bg: 'bg-blue-100 dark:bg-blue-900', text: 'text-blue-800 dark:text-blue-200' };
+    case 'SUGGESTED':
+      return { bg: 'bg-yellow-100 dark:bg-yellow-900', text: 'text-yellow-800 dark:text-yellow-200' };
+    default:
+      return { bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-800 dark:text-gray-200' };
+  }
+};
 
 export default function MonthView() {
   const { 
@@ -64,20 +79,6 @@ export default function MonthView() {
   const closePostForm = () => {
     setShowPostForm(false);
     setSelectedPost(null);
-  };
-
-  // Function to get status badge styles
-  const getStatusStyles = (status: string) => {
-    switch (status) {
-      case 'POSTED':
-        return { bg: 'bg-green-100 dark:bg-green-900', text: 'text-green-800 dark:text-green-200' };
-      case 'SCHEDULED':
-        return { bg: 'bg-blue-100 dark:bg-blue-900', text: 'text-blue-800 dark:text-blue-200' };
-      case 'SUGGESTED':
-        return { bg: 'bg-yellow-100 dark:bg-yellow-900', text: 'text-yellow-800 dark:text-yellow-200' };
-      default:
-        return { bg: 'bg-gray-100 dark:bg-gray-800', text: 'text-gray-800 dark:text-gray-200' };
-    }
   };
 
   if (loading) {
@@ -154,12 +155,21 @@ export default function MonthView() {
                 <div className="space-y-1 overflow-y-auto flex-grow">
                   {dayPosts.slice(0, 4).map((post) => {
                     const statusStyles = getStatusStyles(post.status);
+                    const platformColors = getPlatformColors(post.platform);
+                    const formatColors = getFormatColors(post.format);
                     
                     return (
                       <div 
                         key={post.id}
                         onClick={(e) => handlePostClick(e, post)}
-                        className={`text-xs p-1 rounded truncate cursor-pointer ${statusStyles.bg} ${statusStyles.text} hover:brightness-95 dark:hover:brightness-110`}
+                        className={`
+                          text-xs p-1 rounded truncate cursor-pointer 
+                          ${platformColors.bg} ${platformColors.darkBg}
+                          ${formatColors.border} ${formatColors.darkBorder}
+                          border-l-2 border-l-solid
+                          hover:brightness-95 dark:hover:brightness-110
+                        `}
+                        title={`${post.title || 'Untitled'} - ${post.platform || 'Website'} - ${post.format || 'Article'}`}
                       >
                         {post.title || 'Untitled Post'}
                       </div>

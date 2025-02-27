@@ -16,6 +16,7 @@ import {
   endOfWeek
 } from 'date-fns';
 import { useCalendar } from './CalendarContext';
+import { getPlatformColors, getFormatColors } from './colorUtils';
 
 export default function YearView() {
   const { currentDate, setCurrentDate, setView, getPostsForMonth, getPostsForDate } = useCalendar();
@@ -64,8 +65,14 @@ export default function YearView() {
             const dayPosts = getPostsForDate(day);
             const hasPost = dayPosts.length > 0;
             
-            // Get the first post's color for the indicator if there are posts
-            const postColor = hasPost ? dayPosts[0].color : '';
+            // Use the first post's platform and format for the indicator if there are posts
+            const platformColors = hasPost && dayPosts[0].platform 
+              ? getPlatformColors(dayPosts[0].platform) 
+              : { opacity: '', darkOpacity: '' };
+              
+            const formatColors = hasPost && dayPosts[0].format 
+              ? getFormatColors(dayPosts[0].format) 
+              : { border: '', darkBorder: '' };
             
             return (
               <div
@@ -77,13 +84,13 @@ export default function YearView() {
               >
                 {hasPost && isCurrentMonth && (
                   <div 
-                    className="absolute rounded-md w-8 h-8 mx-auto"
-                    style={{ backgroundColor: `${postColor}30`, top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
+                    className={`absolute rounded-md w-8 h-8 mx-auto border ${formatColors.border} ${platformColors.opacity}`} 
+                    style={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}
                   ></div>
                 )}
                 {isTodayDate && (
-                  <div className="absolute rounded-md opacity-70 z-5 w-8 h-8 mx-auto" 
-                       style={{ backgroundColor: '#6366f1', top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}></div>
+                  <div className="absolute rounded-md opacity-70 z-5 w-8 h-8 mx-auto bg-indigo-500" 
+                       style={{ top: '50%', left: '50%', transform: 'translate(-50%, -50%)' }}></div>
                 )}
                 <span className={`z-10 text-sm ${isCurrentMonth ? 'font-semibold' : ''} ${isTodayDate ? 'text-white' : ''}`}>
                   {format(day, 'd')}
