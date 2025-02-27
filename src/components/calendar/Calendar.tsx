@@ -1,6 +1,6 @@
 'use client';
 
-import React from 'react';
+import React, { useState } from 'react';
 import { 
   addMonths, 
   subMonths, 
@@ -17,9 +17,11 @@ import MonthView from './MonthView';
 import WeekView from './WeekView';
 import DayView from './DayView';
 import YearView from './YearView';
+import PlannerModal from './PlannerModal';
 
 export default function Calendar() {
   const { currentDate, setCurrentDate, view, setView } = useCalendar();
+  const [isPlannerOpen, setIsPlannerOpen] = useState(false);
   
   const navigateCalendar = (direction: 'prev' | 'next') => {
     if (direction === 'prev') {
@@ -75,6 +77,22 @@ export default function Calendar() {
     }
   };
   
+  // Function to get the appropriate time period label for the planner button
+  const getPlannerTimeLabel = () => {
+    switch (view) {
+      case 'day':
+        return 'day';
+      case 'week':
+        return 'week';
+      case 'month':
+        return 'month';
+      case 'year':
+        return 'year';
+      default:
+        return 'period';
+    }
+  };
+  
   // Render the appropriate view component
   const renderView = () => {
     switch (view) {
@@ -102,8 +120,20 @@ export default function Calendar() {
     <div className="flex flex-col h-full w-full">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-3 p-3 w-full">
         <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
-          {/* Left spacer div for balance */}
-          <div className="hidden sm:block sm:w-1/4"></div>
+          {/* Left side - AI Planner button */}
+          <div className="sm:w-1/4 flex justify-start">
+            {view !== 'year' && (
+              <button
+                onClick={() => setIsPlannerOpen(true)}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm transition-colors flex items-center gap-1"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                </svg>
+                Plan my {getPlannerTimeLabel()}
+              </button>
+            )}
+          </div>
           
           {/* Center navigation controls */}
           <div className="flex items-center gap-2 sm:absolute sm:left-1/2 sm:transform sm:-translate-x-1/2">
@@ -162,6 +192,16 @@ export default function Calendar() {
       <div className="flex-1 overflow-hidden flex w-full">
         {renderView()}
       </div>
+      
+      {/* AI Planner Modal */}
+      {isPlannerOpen && (
+        <PlannerModal
+          isOpen={isPlannerOpen}
+          onClose={() => setIsPlannerOpen(false)}
+          timeFrame={view}
+          currentDate={currentDate}
+        />
+      )}
     </div>
   );
 } 

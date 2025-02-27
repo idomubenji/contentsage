@@ -3,15 +3,26 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { LogOut, Sun, Moon, Shield } from "lucide-react";
+import { 
+  LogOut, 
+  Sun, 
+  Moon, 
+  Shield, 
+  Home, 
+  Search, 
+  Calendar as CalendarIcon, 
+  Users, 
+  MessageSquare 
+} from "lucide-react";
 import { useAuth } from "../lib/auth-context";
 import { useTheme } from "../lib/theme-context";
 
 const navItems = [
-  { name: "Home", path: "/" },
-  { name: "Inspector", path: "/inspector" },
-  { name: "Calendar", path: "/calendar" },
-  { name: "Organizations", path: "/organizations" },
+  { name: "Home", path: "/", icon: Home },
+  { name: "Inspector", path: "/inspector", icon: Search },
+  { name: "Calendar", path: "/calendar", icon: CalendarIcon },
+  { name: "Organizations", path: "/organizations", icon: Users },
+  { name: "Prompts", path: "/prompts", icon: MessageSquare },
 ];
 
 export default function Sidebar() {
@@ -44,17 +55,19 @@ export default function Sidebar() {
       <nav className="space-y-2">
         {navItems.map((item) => {
           const isActive = pathname === item.path;
+          const Icon = item.icon;
           return (
             <Link
               key={item.path}
               href={item.path}
-              className={`block px-4 py-2 rounded-md transition-colors ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-md transition-colors ${
                 isActive
                   ? "bg-gray-200 text-gray-900 font-medium dark:bg-gray-700 dark:text-white"
                   : "text-gray-600 hover:bg-gray-200 hover:text-gray-900 dark:text-gray-300 dark:hover:bg-gray-700 dark:hover:text-white"
               }`}
             >
-              {item.name}
+              <Icon size={18} />
+              <span>{item.name}</span>
             </Link>
           );
         })}

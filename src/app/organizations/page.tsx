@@ -53,6 +53,8 @@ export default function OrganizationsPage() {
   const [pendingRequests, setPendingRequests] = useState<any[]>([]);
   const [joinRequestsToApprove, setJoinRequestsToApprove] = useState<any[]>([]);
   const [error, setError] = useState("");
+  // Add success message state
+  const [successMessage, setSuccessMessage] = useState("");
   // Add states for organization analysis
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
@@ -432,6 +434,98 @@ export default function OrganizationsPage() {
     setError("");
   };
 
+  // Add function to save analysis results to preferences
+  const saveAnalysisToPreferences = async (orgId: string, analysisInfo: any) => {
+    console.log("saveAnalysisToPreferences called with:", { orgId, analysisInfo });
+    
+    if (!user) {
+      console.error("saveAnalysisToPreferences: No user found");
+      setError('Note: Analysis completed but failed to save to preferences (no user)');
+      return;
+    }
+    
+    if (!analysisInfo) {
+      console.error("saveAnalysisToPreferences: No analysis info provided");
+      setError('Note: Analysis completed but failed to save to preferences (no analysis data)');
+      return;
+    }
+    
+    try {
+      // Map analysis data to preferences format
+      const mappedPreferences = {
+        contentPhilosophy: analysisInfo.strategy || '',
+        contentTone: analysisInfo.tone || '',
+        targetAudience: analysisInfo.description ? `${analysisInfo.industry || ''} audiences interested in ${analysisInfo.description}`.trim() : '',
+      };
+      
+      console.log("saveAnalysisToPreferences: Mapped preferences:", mappedPreferences);
+      
+      // Call the preferences API to update the JSONB
+      console.log("saveAnalysisToPreferences: Calling API with payload:", {
+        organizationId: orgId,
+        userId: user.id,
+        preferences: mappedPreferences
+      });
+      
+      const response = await fetch('/api/organizations/preferences', {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          organizationId: orgId,
+          userId: user.id,
+          preferences: mappedPreferences
+        }),
+      });
+      
+      console.log("saveAnalysisToPreferences: API response status:", response.status);
+      
+      // Get the response text first to debug any issues
+      const responseText = await response.text();
+      console.log("saveAnalysisToPreferences: Raw response text:", responseText);
+      
+      // Try to parse the response as JSON
+      let responseData;
+      try {
+        responseData = JSON.parse(responseText);
+        console.log("saveAnalysisToPreferences: Parsed response data:", responseData);
+      } catch (parseError) {
+        console.error("saveAnalysisToPreferences: Error parsing response as JSON:", parseError);
+        throw new Error("Invalid JSON response from server: " + responseText);
+      }
+      
+      if (!response.ok) {
+        const errorMessage = responseData?.error || `API returned ${response.status}: ${response.statusText}`;
+        console.error("Error saving preferences:", {
+          status: response.status,
+          statusText: response.statusText,
+          data: responseData
+        });
+        throw new Error(errorMessage);
+      }
+      
+      console.log("Analysis saved to preferences successfully", responseData);
+      setSuccessMessage(prev => `${prev} and saved to organization preferences`);
+      setError(""); // Clear any previous error message
+      
+    } catch (error) {
+      console.error('Error saving analysis to preferences:', error);
+      
+      // More detailed error logging
+      if (error instanceof Error) {
+        console.error('Error details:', {
+          name: error.name,
+          message: error.message,
+          stack: error.stack
+        });
+      }
+      
+      // Don't override the main success message, just add a note about the preferences issue
+      setError('Note: Analysis completed but failed to save to preferences');
+    }
+  };
+
   // Add function to analyze organization posts
   const analyzeOrganization = async (orgId: string) => {
     if (!user) return;
@@ -440,6 +534,7 @@ export default function OrganizationsPage() {
       setIsAnalyzing(true);
       setSelectedOrgId(orgId); // Make sure we're setting the selected org ID
       setError("");
+      setSuccessMessage(""); // Clear any previous success message
       console.log(`Starting analysis for organization ${orgId} (type: ${typeof orgId})`);
       
       // Verify the organization exists in our local state first
@@ -526,8 +621,11 @@ export default function OrganizationsPage() {
         return org;
       }));
       
-      // Show success message
-      setError(`Analysis completed successfully for ${organization.name}`);
+      // Show success message instead of using the error state
+      setSuccessMessage(`Analysis completed successfully for ${organization.name}`);
+      
+      // Step 5: Save analysis results to preferences JSONB
+      await saveAnalysisToPreferences(orgId, result.analysis);
       
     } catch (error) {
       console.error('Error analyzing organization:', error);
@@ -558,6 +656,13 @@ export default function OrganizationsPage() {
           Add Organization
         </button>
       </div>
+      
+      {/* Display success message */}
+      {successMessage && (
+        <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4">
+          {successMessage}
+        </div>
+      )}
       
       {error && (
         <div className="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-4">
@@ -649,6 +754,19 @@ export default function OrganizationsPage() {
                             <p className="text-gray-700 dark:text-gray-300">{org.info.tone}</p>
                           </div>
                         )}
+                        
+                        {/* Add button to save analysis to preferences */}
+                        <div className="pt-3 border-t border-gray-200 dark:border-gray-600">
+                          <button
+                            onClick={() => saveAnalysisToPreferences(org.id, org.info)}
+                            className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-sm"
+                          >
+                            Save Analysis to Preferences
+                          </button>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                            This will update the organization's content preferences based on this analysis.
+                          </p>
+                        </div>
                       </div>
                     ) : (
                       <div className="text-center py-4">

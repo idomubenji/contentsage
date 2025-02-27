@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        textarea {
+            width: 100%;
+            height: 200px;
+            margin-bottom: 20px;
+        }
+        pre {
+            background-color: #f4f4f4;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <h1>ContentSage API Test</h1>
+    
+    <div class="container">
+        <h2>Step 1: Get Organization IDs</h2>
+        <button id="getOrgs">Fetch Organizations</button>
+        <div id="orgsResult" style="margin-top: 10px;"></div>
+    </div>
+    
+    <div class="container">
+        <h2>Step 2: Generate a Plan</h2>
+        <label for="orgId">Organization ID:</label>
+        <input type="text" id="orgId" style="width: 300px; margin-bottom: 10px;">
+        <button id="generatePlan">Generate Plan</button>
+        <div id="planResult" style="margin-top: 10px;"></div>
+    </div>
+    
+    <div class="container">
+        <h2>Step 3: Save Suggestions</h2>
+        <p>Edit suggestions JSON before saving:</p>
+        <textarea id="suggestions"></textarea>
+        <button id="saveSuggestions">Save Suggestions</button>
+        <div id="saveResult" style="margin-top: 10px;"></div>
+    </div>
+    
+    <script>
+        document.getElementById('getOrgs').addEventListener('click', async () => {
+            try {
+                const response = await fetch('/api/organizations', {
+                    method: 'GET',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const data = await response.json();
+                const resultDiv = document.getElementById('orgsResult');
+                
+                if (data.organizations && data.organizations.length > 0) {
+                    const html = `
+                        <p>Found ${data.organizations.length} organizations:</p>
+                        <ul>
+                            ${data.organizations.map(org => 
+                                `<li><strong>${org.name}</strong> - ID: <span style="user-select:all">${org.id}</span></li>`
+                            ).join('')}
+                        </ul>
+                    `;
+                    resultDiv.innerHTML = html;
+                } else {
+                    resultDiv.innerHTML = '<p>No organizations found or error getting organizations.</p>';
+                }
+            } catch (error) {
+                console.error('Error fetching organizations:', error);
+                document.getElementById('orgsResult').innerHTML = `<p>Error: ${error.message}</p>`;
+            }
+        });
+        
+        document.getElementById('generatePlan').addEventListener('click', async () => {
+            const orgId = document.getElementById('orgId').value.trim();
+            
+            if (!orgId) {
+                document.getElementById('planResult').innerHTML = '<p>Please enter an organization ID first</p>';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/ai-planner', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        timeFrame: 'week',
+                        currentDate: new Date().toISOString().split('T')[0],
+                        platformSettings: [
+                            { platform: 'Web', count: 2, min: 0, max: 5, logo: '🌐' },
+                            { platform: '𝕏', count: 3, min: 0, max: 10, logo: '𝕏' },
+                            { platform: 'Instagram', count: 2, min: 0, max: 7, logo: '📸' }
+                        ],
+                        customPrompt: 'Content marketing and social media engagement',
+                        organizationId: orgId
+                    })
+                });
+                
+                const data = await response.json();
+                const resultDiv = document.getElementById('planResult');
+                
+                if (data.suggestions && data.suggestions.length > 0) {
+                    resultDiv.innerHTML = `<p>Successfully generated ${data.suggestions.length} suggestions</p>`;
+                    document.getElementById('suggestions').value = JSON.stringify({
+                        suggestions: data.suggestions,
+                        organizationId: orgId
+                    }, null, 2);
+                } else {
+                    resultDiv.innerHTML = '<p>Error generating suggestions or no suggestions returned.</p>';
+                    if (data.error) {
+                        resultDiv.innerHTML += `<p>Error: ${data.error}</p>`;
+                    }
+                }
+            } catch (error) {
+                console.error('Error generating plan:', error);
+                document.getElementById('planResult').innerHTML = `<p>Error: ${error.message}</p>`;
+            }
+        });
+        
+        document.getElementById('saveSuggestions').addEventListener('click', async () => {
+            const suggestionsText = document.getElementById('suggestions').value.trim();
+            
+            if (!suggestionsText) {
+                document.getElementById('saveResult').innerHTML = '<p>Please generate or enter suggestions first</p>';
+                return;
+            }
+            
+            try {
+                const suggestionsData = JSON.parse(suggestionsText);
+                
+                const response = await fetch('/api/posts/suggested', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(suggestionsData)
+                });
+                
+                const data = await response.json();
+                const resultDiv = document.getElementById('saveResult');
+                
+                if (data.success) {
+                    resultDiv.innerHTML = `<p>${data.message}</p>`;
+                } else {
+                    resultDiv.innerHTML = `
+                        <p>Error saving suggestions:</p>
+                        <pre>${JSON.stringify(data, null, 2)}</pre>
+                    `;
+                }
+            } catch (error) {
+                console.error('Error saving suggestions:', error);
+                document.getElementById('saveResult').innerHTML = `<p>Error: ${error.message}</p>`;
+            }
+        });
+    </script>
+</body>
+</html> 
