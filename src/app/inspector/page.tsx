@@ -22,6 +22,12 @@ type Post = {
   created_at: string;
 };
 
+// Define sort type
+type SortConfig = {
+  key: keyof Post | null;
+  direction: 'asc' | 'desc';
+};
+
 // Define filter types
 type DateRange = {
   startDate: string | null;
@@ -201,7 +207,7 @@ function PaginationControls({
               >
                 <span className="sr-only">Previous</span>
                 <svg className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                  <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 11-1.04 1.08l-4.5-4.25a.75.75 0 010-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" />
+                  <path fillRule="evenodd" d="M12.79 5.23a.75.75 0 01-.02 1.06L8.832 10l3.938 3.71a.75.75 0 101.04-1.08l-4.5-4.25a.75.75 0 000-1.08l4.5-4.25a.75.75 0 011.06.02z" clipRule="evenodd" />
                 </svg>
               </button>
               
@@ -386,6 +392,12 @@ export default function Inspector() {
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   
+  // Sort state
+  const [sortConfig, setSortConfig] = useState<SortConfig>({
+    key: 'posted_date',
+    direction: 'desc'
+  });
+  
   // Filter state
   const [filters, setFilters] = useState<Filters>({
     format: null,
@@ -420,6 +432,17 @@ export default function Inspector() {
     setFilteredPosts(posts);
   }, [posts]);
   
+  // Handle sort changes
+  const handleSort = (key: keyof Post) => {
+    setSortConfig(prevSort => ({
+      key,
+      direction: prevSort.key === key && prevSort.direction === 'desc' ? 'asc' : 'desc'
+    }));
+    
+    // Reset to first page when sort changes
+    setCurrentPage(1);
+  };
+  
   // Handle filter changes
   const handleFilterChange = (name: string, value: any) => {
     setFilters(prevFilters => ({
@@ -447,7 +470,7 @@ export default function Inspector() {
     setCurrentPage(1);
   };
   
-  // Apply filters to posts
+  // Apply filters and sorting to posts
   useEffect(() => {
     if (posts.length === 0) {
       setFilteredPosts([]);
@@ -498,12 +521,56 @@ export default function Inspector() {
       });
     }
     
+    // Apply sorting if a sort key is selected
+    if (sortConfig.key) {
+      result.sort((a, b) => {
+        // Handle case when sort key is null (shouldn't happen due to the if check, but TypeScript needs this)
+        if (!sortConfig.key) return 0;
+        
+        // Special handling for dates
+        if (sortConfig.key === 'posted_date' || sortConfig.key === 'created_at') {
+          const dateA = new Date(a[sortConfig.key] || '').getTime();
+          const dateB = new Date(b[sortConfig.key] || '').getTime();
+          
+          if (sortConfig.direction === 'asc') {
+            return dateA - dateB;
+          } else {
+            return dateB - dateA;
+          }
+        }
+        
+        // Handle string comparisons (case-insensitive)
+        if (typeof a[sortConfig.key] === 'string' && typeof b[sortConfig.key] === 'string') {
+          const valueA = (a[sortConfig.key] as string).toLowerCase();
+          const valueB = (b[sortConfig.key] as string).toLowerCase();
+          
+          if (sortConfig.direction === 'asc') {
+            return valueA.localeCompare(valueB);
+          } else {
+            return valueB.localeCompare(valueA);
+          }
+        }
+        
+        // Fallback for other types or null/undefined values
+        const valueA = a[sortConfig.key];
+        const valueB = b[sortConfig.key];
+        
+        if (valueA === valueB) return 0;
+        if (valueA === null || valueA === undefined) return 1;
+        if (valueB === null || valueB === undefined) return -1;
+        
+        return sortConfig.direction === 'asc' 
+          ? (valueA < valueB ? -1 : 1)
+          : (valueA > valueB ? -1 : 1);
+      });
+    }
+    
     setFilteredPosts(result);
     
-    // Clear selections when filters change
+    // Clear selections when filters or sort change
     setSelectedPosts([]);
     
-  }, [posts, filters]);
+  }, [posts, filters, sortConfig]);
   
   // Handle clicks outside the table to unhighlight rows
   useEffect(() => {
@@ -915,6 +982,28 @@ export default function Inspector() {
     }
   }, [currentPosts.length]);
 
+  // Function to get sort icon based on current sort config
+  const getSortIcon = (columnKey: keyof Post) => {
+    // If no sort key is set or if the column is different from the sort key
+    if (!sortConfig.key || sortConfig.key !== columnKey) {
+      return (
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-gray-400 dark:text-gray-500 opacity-50">
+          <path fillRule="evenodd" d="M10 3a.75.75 0 01.55.24l3.25 3.5a.75.75 0 11-1.1 1.02L10 4.852 7.3 7.76a.75.75 0 01-1.1-1.02l3.25-3.5A.75.75 0 0110 3zm-3.76 9.2a.75.75 0 011.06.04l2.7 2.908 2.7-2.908a.75.75 0 111.1 1.02l-3.25 3.5a.75.75 0 01-1.1 0l-3.25-3.5a.75.75 0 01.04-1.06z" clipRule="evenodd" />
+        </svg>
+      );
+    }
+    
+    return sortConfig.direction === 'desc' ? (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-blue-600 dark:text-blue-400">
+        <path fillRule="evenodd" d="M10 3a.75.75 0 01.75.75v10.638l3.96-4.158a.75.75 0 111.08 1.04l-5.25 5.5a.75.75 0 01-1.08 0l-5.25-5.5a.75.75 0 111.08-1.04l3.96 4.158V3.75A.75.75 0 0110 3z" clipRule="evenodd" />
+      </svg>
+    ) : (
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4 text-blue-600 dark:text-blue-400">
+        <path fillRule="evenodd" d="M10 17a.75.75 0 01-.75-.75V5.612L5.29 9.77a.75.75 0 01-1.08-1.04l5.25-5.5a.75.75 0 011.08 0l5.25 5.5a.75.75 0 11-1.08 1.04l-3.96-4.158V16.25A.75.75 0 0110 17z" clipRule="evenodd" />
+      </svg>
+    );
+  };
+
   return (
     <div className="p-8">
       <h1 className="text-3xl font-bold mb-6 dark:text-white">Content Inspector</h1>
@@ -986,12 +1075,60 @@ export default function Inspector() {
                         />
                       </div>
                     </th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Title</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Posted Date</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Format</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Platform</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Status</th>
-                    <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Description</th>
+                    <th 
+                      className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700"
+                      onClick={() => handleSort('title')}
+                    >
+                      <div className="flex items-center space-x-1">
+                        <span>Title</span>
+                        <span className="inline-block">{getSortIcon('title')}</span>
+                      </div>
+                    </th>
+                    <th 
+                      className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700"
+                      onClick={() => handleSort('posted_date')}
+                    >
+                      <div className="flex items-center space-x-1">
+                        <span>Posted Date</span>
+                        <span className="inline-block">{getSortIcon('posted_date')}</span>
+                      </div>
+                    </th>
+                    <th 
+                      className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700"
+                      onClick={() => handleSort('format')}
+                    >
+                      <div className="flex items-center space-x-1">
+                        <span>Format</span>
+                        <span className="inline-block">{getSortIcon('format')}</span>
+                      </div>
+                    </th>
+                    <th 
+                      className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700"
+                      onClick={() => handleSort('platform')}
+                    >
+                      <div className="flex items-center space-x-1">
+                        <span>Platform</span>
+                        <span className="inline-block">{getSortIcon('platform')}</span>
+                      </div>
+                    </th>
+                    <th 
+                      className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700"
+                      onClick={() => handleSort('status')}
+                    >
+                      <div className="flex items-center space-x-1">
+                        <span>Status</span>
+                        <span className="inline-block">{getSortIcon('status')}</span>
+                      </div>
+                    </th>
+                    <th 
+                      className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700"
+                      onClick={() => handleSort('description')}
+                    >
+                      <div className="flex items-center space-x-1">
+                        <span>Description</span>
+                        <span className="inline-block">{getSortIcon('description')}</span>
+                      </div>
+                    </th>
                     <th className="px-4 py-3 text-left text-sm font-semibold text-gray-700 dark:text-gray-200">Actions</th>
                   </tr>
                 </thead>
