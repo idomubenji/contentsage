@@ -18,7 +18,6 @@ import { useCalendar, Post } from './CalendarContext';
 import PostForm from './PostForm';
 import { getPlatformColors, getFormatColors } from './colorUtils';
 import { downloadWeekCalendar } from '@/utils/icsGenerator';
-import CalendarExportMenu from './CalendarExportMenu';
 
 export default function WeekView() {
   const { currentDate, getPostsForDate } = useCalendar();
@@ -78,36 +77,28 @@ export default function WeekView() {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow overflow-auto h-full w-full flex-1">
-      <div className="sticky top-0 bg-white dark:bg-gray-800 z-10 w-full">
-        <div className="relative">
-          <CalendarExportMenu
-            type="week"
-            date={currentDate}
-            posts={getPostsForWeek()}
-            className="absolute right-2 top-2"
-          />
-        </div>
-        <div className="grid grid-cols-8 border-b dark:border-gray-700 w-full mt-10">
-          <div className="p-2 border-r dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium"></div>
-          {weekDays.map((day) => (
-            <div 
-              key={day.toString()} 
-              className={`
-                p-2 text-center border-r dark:border-gray-700
-                ${isToday(day) ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}
-              `}
-            >
-              <div className="font-medium text-gray-700 dark:text-gray-300">{format(day, 'EEE')}</div>
-              <div className={`text-xl font-bold ${isToday(day) ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-800 dark:text-white'}`}>
-                {format(day, 'd')}
-              </div>
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow h-full w-full flex flex-col">
+      {/* Calendar header */}
+      <div className="grid grid-cols-8 border-b dark:border-gray-700 w-full">
+        <div className="p-2 border-r dark:border-gray-700 text-gray-700 dark:text-gray-300 font-medium"></div>
+        {weekDays.map((day) => (
+          <div 
+            key={day.toString()} 
+            className={`
+              p-2 text-center border-r dark:border-gray-700
+              ${isToday(day) ? 'bg-indigo-50 dark:bg-indigo-900/30' : ''}
+            `}
+          >
+            <div className="font-medium text-gray-700 dark:text-gray-300">{format(day, 'EEE')}</div>
+            <div className={`text-xl font-bold ${isToday(day) ? 'text-indigo-600 dark:text-indigo-400' : 'text-gray-800 dark:text-white'}`}>
+              {format(day, 'd')}
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
       
-      <div className="w-full">
+      {/* Calendar content - scrollable area */}
+      <div className="overflow-auto flex-1">
         {timeSlots.map((hour) => (
           <div key={hour} className="grid grid-cols-8 border-b dark:border-gray-700 min-h-[70px] group hover:bg-gray-50 dark:hover:bg-gray-750 w-full">
             <div className="p-2 border-r dark:border-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium text-right pr-3 pt-1.5">

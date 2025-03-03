@@ -346,6 +346,14 @@ export default function PostForm({ date, post, onClose }: PostFormProps) {
             </select>
           </div>
           
+          {post?.derivedFrom && (
+            <div className="mt-4">
+              <div className="text-sm text-blue-600 dark:text-blue-400 italic font-medium">
+                Derived from blog post: "{post.derivedFrom}"
+              </div>
+            </div>
+          )}
+          
           <div className="pt-4 border-t border-gray-200 dark:border-gray-700 flex justify-between">
             {post && (
               <button

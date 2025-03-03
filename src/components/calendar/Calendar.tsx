@@ -18,9 +18,10 @@ import WeekView from './WeekView';
 import DayView from './DayView';
 import YearView from './YearView';
 import PlannerModal from './PlannerModal';
+import CalendarExportMenu from './CalendarExportMenu';
 
 export default function Calendar() {
-  const { currentDate, setCurrentDate, view, setView } = useCalendar();
+  const { currentDate, setCurrentDate, view, setView, getPostsForDate, getPostsForMonth, getPostsForWeek } = useCalendar();
   const [isPlannerOpen, setIsPlannerOpen] = useState(false);
   
   // Effect to sync with URL params (optional enhancement for sharable links)
@@ -104,6 +105,20 @@ export default function Calendar() {
     }
   };
   
+  // Function to get posts for current view
+  const getCurrentViewPosts = () => {
+    switch (view) {
+      case 'day':
+        return getPostsForDate(currentDate);
+      case 'week':
+        return getPostsForWeek ? getPostsForWeek(currentDate) : [];
+      case 'month':
+        return getPostsForMonth ? getPostsForMonth(currentDate) : [];
+      default:
+        return [];
+    }
+  };
+  
   // Render the appropriate view component
   const renderView = () => {
     switch (view) {
@@ -131,19 +146,24 @@ export default function Calendar() {
     <div className="flex flex-col h-full w-full">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow mb-3 p-3 w-full">
         <div className="flex flex-col sm:flex-row justify-between items-center gap-3">
-          {/* Left side - AI Planner button */}
+          {/* View options nav */}
           <div className="sm:w-1/4 flex justify-start">
-            {view !== 'year' && (
-              <button
-                onClick={() => setIsPlannerOpen(true)}
-                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm transition-colors flex items-center gap-1"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                  <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
-                </svg>
-                Plan my {getPlannerTimeLabel()}
-              </button>
-            )}
+            <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 p-1 rounded-md">
+              {viewOptions.map((option) => (
+                <button
+                  key={option.value}
+                  onClick={() => setView(option.value)}
+                  className={`
+                    px-3 py-1 text-sm font-medium rounded-md transition-colors
+                    ${view === option.value 
+                      ? 'bg-white dark:bg-gray-900 shadow-sm text-indigo-600 dark:text-indigo-400' 
+                      : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}
+                  `}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
           </div>
           
           {/* Center navigation controls */}
@@ -180,22 +200,25 @@ export default function Calendar() {
             </button>
           </div>
           
-          {/* Right view options */}
-          <div className="flex gap-1 bg-gray-100 dark:bg-gray-700 p-1 rounded-md">
-            {viewOptions.map((option) => (
+          {/* Right action buttons */}
+          <div className="sm:w-1/4 flex justify-end items-center gap-2">
+            {view !== 'year' && (
               <button
-                key={option.value}
-                onClick={() => setView(option.value)}
-                className={`
-                  px-3 py-1 text-sm font-medium rounded-md transition-colors
-                  ${view === option.value 
-                    ? 'bg-white dark:bg-gray-900 shadow-sm text-indigo-600 dark:text-indigo-400' 
-                    : 'text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600'}
-                `}
+                onClick={() => setIsPlannerOpen(true)}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm transition-colors flex items-center gap-1"
               >
-                {option.label}
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+                  <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />
+                </svg>
+                Plan my {getPlannerTimeLabel()}
               </button>
-            ))}
+            )}
+            
+            <CalendarExportMenu
+              type={view === 'day' ? 'day' : view === 'week' ? 'week' : 'month'}
+              date={currentDate}
+              posts={getCurrentViewPosts()}
+            />
           </div>
         </div>
       </div>

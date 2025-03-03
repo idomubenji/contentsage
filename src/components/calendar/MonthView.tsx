@@ -17,7 +17,6 @@ import { useCalendar, Post } from './CalendarContext';
 import PostForm from './PostForm';
 import { getPlatformColors, getFormatColors } from './colorUtils';
 import { downloadMonthCalendar } from '@/utils/icsGenerator';
-import CalendarExportMenu from './CalendarExportMenu';
 
 // Function to get status badge styles
 const getStatusStyles = (status: string) => {
@@ -115,15 +114,7 @@ export default function MonthView() {
 
   return (
     <div className="bg-white dark:bg-gray-800 rounded-lg shadow h-full w-full flex flex-col">
-      <div className="p-2 relative">
-        <CalendarExportMenu 
-          type="month"
-          date={currentDate}
-          posts={getPostsForMonth(currentDate)}
-          className="absolute right-2 top-2"
-        />
-      </div>
-      
+      {/* Calendar content */}
       <div className="p-2 flex-grow flex flex-col w-full">
         <div className="grid grid-cols-7 gap-1 mb-1 w-full">
           {weekDays.map((day) => (

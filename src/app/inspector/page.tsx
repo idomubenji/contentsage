@@ -775,11 +775,14 @@ export default function Inspector() {
         
         console.log("Table check successful, proceeding with user query");
         
-        // Fetch posts for the current user
+        // Fetch posts for the current user AND from organizations they belong to
+        // RLS policies will automatically filter this to only include:
+        // 1. Posts where user_id equals the current user
+        // 2. Posts where organization_id is in the list of orgs the user belongs to
         const { data, error: queryError } = await supabase
           .from('posts')
           .select('*')
-          .eq('user_id', user.id)
+          .or(`user_id.eq.${user.id},organization_id.not.is.null`)
           .order('posted_date', { ascending: false })
           .order('created_at', { ascending: false });
 

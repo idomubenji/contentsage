@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
-import { startOfMonth, endOfMonth, eachDayOfInterval, format, parseISO, parse } from 'date-fns';
+import { startOfMonth, endOfMonth, eachDayOfInterval, format, parseISO, parse, startOfWeek, endOfWeek } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 import { hasBeenExported, resetExportedEvents } from '@/utils/icsGenerator';
@@ -22,6 +22,7 @@ export interface Post {
   hasVideo?: boolean;
   hasInfographic?: boolean;
   hasPodcast?: boolean;
+  derivedFrom?: string; // For social posts derived from web content
 }
 
 interface CalendarContextType {
@@ -37,6 +38,7 @@ interface CalendarContextType {
   deletePost: (id: string) => Promise<void>;
   getPostsForDate: (date: Date) => Post[];
   getPostsForMonth: (date: Date) => Post[];
+  getPostsForWeek: (date: Date) => Post[];
   refreshPosts: () => Promise<void>;
   isExported: (postId: string) => boolean;
 }
@@ -148,11 +150,13 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
       setLoading(true);
       setError(null);
       
-      // Fetch posts for the current user
+      // Fetch posts for the current user AND from organizations they belong to
+      // We don't need to manually filter by organization_id since Row Level Security
+      // policies are already configured to handle this at the database level
       const { data, error: fetchError } = await supabase
         .from('posts')
         .select('*')
-        .eq('user_id', user.id)
+        .or(`user_id.eq.${user.id},organization_id.not.is.null`)
         .order('posted_date', { ascending: false });
 
       if (fetchError) {
@@ -363,6 +367,30 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
+  const getPostsForWeek = (date: Date) => {
+    // Get start and end of the week
+    const weekStart = startOfWeek(date);
+    const weekEnd = endOfWeek(date);
+    
+    // Get all days in the week
+    const weekDays = eachDayOfInterval({
+      start: weekStart,
+      end: weekEnd,
+    });
+    
+    // Get all posts for the week
+    const weekPosts: Post[] = [];
+    weekDays.forEach(day => {
+      const dayPosts = getPostsForDate(day);
+      weekPosts.push(...dayPosts);
+    });
+    
+    // Remove duplicates (if any) by creating a Map with post id as key
+    return Array.from(
+      new Map(weekPosts.map(post => [post.id, post])).values()
+    );
+  };
+
   return (
     <CalendarContext.Provider
       value={{
@@ -378,6 +406,7 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
         deletePost,
         getPostsForDate,
         getPostsForMonth,
+        getPostsForWeek,
         refreshPosts: fetchPosts,
         isExported
       }}
