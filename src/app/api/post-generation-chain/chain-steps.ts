@@ -518,7 +518,6 @@ export function schedulePostsEvenly(
   currentDate: Date
 ): ScheduledPost[] {
   console.log("SCHEDULING EVENLY - Start date:", currentDate.toISOString());
-  console.log("SCHEDULING EVENLY - First post title:", posts.length > 0 ? posts[0].title : "No posts");
   
   // Group posts by platform
   const groupedPosts: Record<string, PostWithSeo[]> = {};
@@ -550,24 +549,24 @@ export function schedulePostsEvenly(
     // Set to last day of the month
     endDate.setFullYear(startDate.getFullYear(), startDate.getMonth() + 1, 0);
   } else if (timeFrame === "week") {
-    endDate.setDate(startDate.getDate() + 6); // 7 days (0-6)
+    endDate.setDate(startDate.getDate() + 6); // 7 days
   } else {
-    endDate.setDate(startDate.getDate() + 13); // 14 days (0-13)
+    endDate.setDate(startDate.getDate() + 13); // 14 days
   }
   
   console.log(`SCHEDULING EVENLY - Planning from ${startDate.toISOString()} to ${endDate.toISOString()}`);
   
   const scheduledPosts: ScheduledPost[] = [];
+  const usedPosts = new Set<string>(); // Track which posts have been scheduled to avoid duplicates
   
   // For each platform, find valid dates and schedule posts
   Object.keys(groupedPosts).forEach(platform => {
     const platformType = platform as string;
-    const posts = groupedPosts[platform];
-    console.log(`Platform ${platform} has ${posts.length} posts to schedule`);
+    const platformPosts = groupedPosts[platform];
+    console.log(`Platform ${platform} has ${platformPosts.length} posts to schedule`);
     
     // Get valid days for this platform
     const validDays = platformDays[platformType] || [0, 1, 2, 3, 4, 5, 6]; // Default to all days
-    console.log(`Platform ${platform} valid days:`, validDays);
     
     // Find all valid dates in the range
     const validDates: Date[] = [];
@@ -592,22 +591,34 @@ export function schedulePostsEvenly(
       }
     }
     
-    // Schedule posts - distribute evenly
-    for (let i = 0; i < posts.length; i++) {
-      // Pick a date using modulo to distribute evenly
+    // Process each post exactly once
+    for (let i = 0; i < platformPosts.length; i++) {
+      const post = platformPosts[i];
+      
+      // Skip if this exact post has already been scheduled
+      const postId = `${post.id || post.title}`; // Use ID if available, otherwise title
+      if (usedPosts.has(postId)) {
+        console.log(`Skipping duplicate post: ${post.title}`);
+        continue;
+      }
+      
+      // Mark this post as used
+      usedPosts.add(postId);
+      
+      // Calculate which date to use - distribute evenly across available dates
       const dateIndex = i % validDates.length;
       const postDate = new Date(validDates[dateIndex]);
       
-      // Set a random time between 9 AM and 5 PM
+      // Set a time between 9 AM and 5 PM
       postDate.setHours(9 + Math.floor(Math.random() * 8), Math.floor(Math.random() * 60), 0, 0);
       
-      // Create scheduled post with ALL original properties
+      // Create scheduled post
       scheduledPosts.push({
-        ...posts[i],
+        ...post,
         posted_date: postDate
       });
       
-      console.log(`Scheduled "${posts[i].title}" for ${postDate.toISOString()}`);
+      console.log(`Scheduled "${post.title}" for ${postDate.toISOString()}`);
     }
   });
   
