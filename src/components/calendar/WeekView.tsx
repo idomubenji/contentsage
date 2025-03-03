@@ -107,7 +107,11 @@ export default function WeekView() {
             
             {weekDays.map((day) => {
               const timeSlotDate = set(day, { hours: hour });
-              const posts = getPostsForDate(day);
+              const posts = getPostsForDate(day).filter(post => {
+                if (!post.posted_date) return false;
+                const postDateTime = new Date(post.posted_date);
+                return postDateTime.getHours() === hour;
+              });
               
               return (
                 <div 

@@ -505,11 +505,13 @@ function fallbackScheduling(
     
     result.push({
       ...posts[i], // Preserve ALL properties, including title
-      posted_date: postDate
+      posted_date: postDate.toISOString(), // Convert Date to string
+      status: 'SCHEDULED' // Add default status
     });
   }
   
-  return result.sort((a, b) => a.posted_date.getTime() - b.posted_date.getTime());
+  // Sort by date (first convert strings back to Date objects for comparison)
+  return result.sort((a, b) => new Date(a.posted_date).getTime() - new Date(b.posted_date).getTime());
 }
 
 export function schedulePostsEvenly(
@@ -615,15 +617,16 @@ export function schedulePostsEvenly(
       // Create scheduled post
       scheduledPosts.push({
         ...post,
-        posted_date: postDate
+        posted_date: postDate.toISOString(), // Convert Date to string
+        status: 'SCHEDULED' // Add default status
       });
       
       console.log(`Scheduled "${post.title}" for ${postDate.toISOString()}`);
     }
   });
   
-  // Sort by date
-  return scheduledPosts.sort((a, b) => a.posted_date.getTime() - b.posted_date.getTime());
+  // Sort by date (first convert strings back to Date objects for comparison)
+  return scheduledPosts.sort((a, b) => new Date(a.posted_date).getTime() - new Date(b.posted_date).getTime());
 }
 
 /**

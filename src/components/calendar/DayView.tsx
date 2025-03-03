@@ -56,7 +56,11 @@ export default function DayView() {
       <div className="overflow-auto flex-1 w-full">
         {timeSlots.map((hour) => {
           const timeSlotDate = set(currentDate, { hours: hour });
-          const posts = getPostsForDate(currentDate);
+          const posts = getPostsForDate(currentDate).filter(post => {
+            if (!post.posted_date) return false;
+            const postDateTime = new Date(post.posted_date);
+            return postDateTime.getHours() === hour;
+          });
           
           return (
             <div 

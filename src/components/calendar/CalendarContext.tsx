@@ -347,10 +347,10 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
   const getPostsForDate = (date: Date) => {
     const dateString = format(date, 'yyyy-MM-dd');
     return posts.filter(post => {
+      if (!post.posted_date) return false;
+      
       // Handle both string dates and Date objects
-      const postDate = post.posted_date 
-        ? format(new Date(post.posted_date), 'yyyy-MM-dd') 
-        : '';
+      const postDate = format(new Date(post.posted_date), 'yyyy-MM-dd');
       return postDate === dateString;
     });
   };
