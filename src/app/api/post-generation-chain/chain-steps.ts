@@ -207,7 +207,7 @@ export async function elaboratePostsStep(
         
         // Get platform-specific instructions
         let platformSpecificInstructions = "";
-        if (idea.platform === "X") {
+        if (idea.platform === "X" || idea.platform === "𝕏") {
           platformSpecificInstructions = "Keep the content VERY CONCISE - under 280 characters for the main content.";
         } else if (idea.platform !== "Web") {
           platformSpecificInstructions = "Keep the content concise and engaging for social media.";
@@ -237,7 +237,7 @@ export async function elaboratePostsStep(
           - callToAction: A clear call-to-action for the end of the article
           `
               : `
-          - content: ${idea.platform === "X" ? "BRIEF content (under 280 characters)" : "The suggested caption"} for the ${idea.platform} post
+          - content: ${(idea.platform === "X" || idea.platform === "𝕏") ? "BRIEF content (under 280 characters)" : "The suggested caption"} for the ${idea.platform} post
           - visualIdea: A brief description of what image or video would work well
           ${idea.platform === "LinkedIn" ? "- estimatedWordCount: Suggested word count (between 100-300)" : ""}
           `

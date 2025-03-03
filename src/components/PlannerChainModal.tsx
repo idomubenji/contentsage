@@ -39,7 +39,7 @@ export default function PlannerChainModal({
   const [platformSettings, setPlatformSettings] = useState<PlatformSetting[]>([
     { platform: 'Web', count: 1, min: 0, max: 10, logo: '/icons/web.svg' },
     { platform: 'LinkedIn', count: 2, min: 0, max: 10, logo: '/icons/linkedin.svg' },
-    { platform: 'X', count: 3, min: 0, max: 10, logo: '/icons/twitter.svg' },
+    { platform: '𝕏', count: 3, min: 0, max: 10, logo: '/icons/twitter.svg' },
     { platform: 'Instagram', count: 1, min: 0, max: 10, logo: '/icons/instagram.svg' }
   ]);
   
