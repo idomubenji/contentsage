@@ -51,34 +51,74 @@ export async function generatePostIdeasStep(
     `;
   }
   
+  // Safely prepare platform requests summary with type checking
+  let requestSummary = "";
+  
+  // Check if platformRequests is an array
+  if (Array.isArray(platformRequests)) {
+    requestSummary = platformRequests
+      .map((req) => `${req.count} ${req.platform} posts${req.platform === "Web" ? " (blog format)" : ""}`)
+      .join(", ");
+  } else {
+    // Handle the case when platformRequests is not an array
+    console.error("platformRequests is not an array:", platformRequests);
+    // Fallback to some default or extract data differently based on actual structure
+    requestSummary = "requested posts";
+  }
+
+  // Construct organization context with inconsistency handling
+  let organizationContext = "";
+  if (organizationInfo && Object.keys(organizationInfo).length > 0) {
+    organizationContext = `
+    Organization information:
+    - Industry: ${organizationInfo.industry || "Not specified"}
+    - Brand voice: ${organizationInfo.voice || "Not specified"}
+    - Key focus areas: ${organizationInfo.interests?.join(", ") || "Not specified"}
+    - Target audience: ${organizationInfo.targetAudience || "Not specified"}
+    
+    IMPORTANT: If there appears to be any inconsistency between the Content Focus below and the organization information above, PRIORITIZE the Content Focus. Otherwise, use both to inform your suggestions harmoniously. Furthermore, Unless otherwise specified, Content Focus should only be applied to 2-4 posts. Any more is overkill. User can override this instruction by specifying a number of posts. If the user specifies a specific time, you should also honor that.
+    `;
+  }
+
+  // Content focus description
+  const contentFocusDescription = customPrompt
+    ? `Content Focus: ${customPrompt}`
+    : "No specific content focus provided.";
+
+  // Recent posts context
+  let recentPostsContext = "";
+  if (recentPosts && recentPosts.length > 0) {
+    recentPostsContext = `
+    Avoid duplicating or being too similar to these recent posts:
+    ${recentPosts.map((p) => `- ${p.title}`).join("\n")}
+    `;
+  }
+
   const prompt = `
     Generate compelling content ideas for the following platforms:
-    ${platformRequests}
+    ${requestSummary}
     
     For each post idea, provide:
-    1. A specific, engaging title
-    2. The target platform
-    3. Brief concept (1-2 sentences)
+    1. Title - A catchy, specific title (not generic)
+    2. Target platform (${platformSettings.map((r) => r.platform).join(", ")})
+    3. Brief concept - A clear description of what the post will cover
+    4. Format - "blog" for Web platform, "social" for social media platforms
+    5. DerivedFrom - For social posts that promote a blog post, reference the blog post's title here
     
-    ${customPrompt ? `Content focus: ${customPrompt}` : ''}
-    ${recentPosts.length > 0 ? `Avoid duplicating recent topics: ${JSON.stringify(recentPosts.map(p => p.title))}` : ''}
+    IMPORTANT GUIDELINES:
+    - PRIORITIZE fulfilling the requested number of posts for each platform (e.g., if 10 X posts are requested, generate all 10)
+    - Make X posts and other social posts concise and engaging (especially X which has character limits)
+    - NOT ALL social posts need to be derived from blog content - only derive when it makes sense
+    - If there are more social posts requested than blog posts, create original social posts that aren't derived from blogs
+    - Ensure a diverse mix of topics across all platforms
     
-    First create compelling website/blog content ideas, then derive social media posts from those ideas.
-    For each social post, indicate which web content it's derived from.
+    ${organizationContext}
     
-    Industry: ${industry}
-    Content tone: ${contentTone}
+    ${contentFocusDescription}
     
-    ${organizationIntentSection}
+    ${recentPostsContext}
     
-    FORMAT REQUIREMENTS:
-    Your response MUST be a valid JSON object containing an array called "ideas".
-    Each idea MUST include:
-    1. title - A compelling, specific title
-    2. platform - The exact platform name from the request
-    3. concept - A brief description of the content
-    4. format - For Web content: "blog"; for social media: "social"
-    5. derivedFrom - For social posts, include the title of the website content it's derived from; leave empty for original website content
+    IMPORTANT: Your response MUST be a valid JSON object with an array called "ideas" containing all suggested post ideas.
   `;
   
   try {
@@ -165,6 +205,14 @@ export async function elaboratePostsStep(
           `;
         }
         
+        // Get platform-specific instructions
+        let platformSpecificInstructions = "";
+        if (idea.platform === "X") {
+          platformSpecificInstructions = "Keep the content VERY CONCISE - under 280 characters for the main content.";
+        } else if (idea.platform !== "Web") {
+          platformSpecificInstructions = "Keep the content concise and engaging for social media.";
+        }
+        
         // Create focused prompt for elaborating content
         const prompt = `
           Elaborate on this ${platformType} idea:
@@ -174,22 +222,28 @@ export async function elaboratePostsStep(
           
           Content tone: ${contentTone}
           
+          ${platformSpecificInstructions}
+          
           ${organizationContext}
           
-          Provide:
-          ${idea.platform === 'Web' 
-            ? '1. An outline with 3-5 bullet points\n2. A suggested structure\n3. Key points to include' 
-            : '1. Suggested caption text\n2. Hashtags (for Instagram/X/LinkedIn)\n3. Visual suggestion'}
-          
-          FORMAT REQUIREMENTS:
-          Return a valid JSON object with the following structure:
-          {
-            "bulletPoints": ["Point 1", "Point 2", ...],
-            "structure": "Introduction, main points, conclusion",
-            "content": "Suggested caption or main content",
-            "hashtags": ["#tag1", "#tag2"],
-            "visualSuggestion": "Image description"
+          Provide the following ${idea.platform === "Web" ? "for this blog post" : "for this social media post"}:
+          ${
+            idea.platform === "Web"
+              ? `
+          - bulletPoints: A list of 3-5 key points the article should cover
+          - outline: A brief outline of the article structure
+          - targetKeywords: 3-5 SEO-friendly keywords or phrases
+          - estimatedWordCount: Suggested word count (between 500-2000)
+          - callToAction: A clear call-to-action for the end of the article
+          `
+              : `
+          - content: ${idea.platform === "X" ? "BRIEF content (under 280 characters)" : "The suggested caption"} for the ${idea.platform} post
+          - visualIdea: A brief description of what image or video would work well
+          ${idea.platform === "LinkedIn" ? "- estimatedWordCount: Suggested word count (between 100-300)" : ""}
+          `
           }
+          
+          Return this data as valid JSON. DO NOT include any additional text or explanation outside the JSON structure.
         `;
         
         try {
@@ -376,165 +430,189 @@ export async function generateSeoInfoStep(
 export async function schedulePostsStep(
   posts: PostWithSeo[],
   timeFrame: CalendarViewType,
-  startDate: Date
+  currentDate: Date
 ): Promise<ScheduledPost[]> {
-  console.log(`Scheduling ${posts.length} posts for ${timeFrame} starting from ${format(startDate, 'yyyy-MM-dd')}`);
+  console.log("SCHEDULING DEBUG - Input currentDate:", currentDate);
+  console.log("SCHEDULING DEBUG - Input currentDate type:", typeof currentDate);
+  console.log("SCHEDULING DEBUG - Input currentDate ISO:", currentDate.toISOString());
+  console.log("SCHEDULING DEBUG - Posts count:", posts.length);
   
-  // Always use our deterministic scheduling algorithm
-  return schedulePostsEvenly(posts, timeFrame, startDate);
+  try {
+    // Ensure currentDate is properly handled
+    let safeCurrentDate: Date;
+    
+    // Handle the case when currentDate might be a string
+    if (typeof currentDate === 'string') {
+      safeCurrentDate = new Date(currentDate);
+      console.log("SCHEDULING DEBUG - Converted string date:", safeCurrentDate.toISOString());
+    } else if (currentDate instanceof Date) {
+      safeCurrentDate = new Date(currentDate.getTime()); // Clone the date
+      console.log("SCHEDULING DEBUG - Cloned Date object:", safeCurrentDate.toISOString());
+    } else {
+      // Fallback to today if date is invalid
+      safeCurrentDate = new Date();
+      console.log("SCHEDULING DEBUG - Using fallback current date:", safeCurrentDate.toISOString());
+    }
+    
+    // Force the date to noon UTC to avoid timezone issues
+    safeCurrentDate.setUTCHours(12, 0, 0, 0);
+    
+    const result = schedulePostsEvenly(posts, timeFrame, safeCurrentDate);
+    console.log("SCHEDULING DEBUG - Successfully scheduled posts:", result.length);
+    
+    if (result.length > 0) {
+      console.log("SCHEDULING DEBUG - First post scheduled at:", result[0].posted_date);
+      console.log("SCHEDULING DEBUG - First post title:", result[0].title);
+      console.log("SCHEDULING DEBUG - Last post scheduled at:", result[result.length-1].posted_date);
+    }
+    
+    return result;
+  } catch (error) {
+    console.error("CRITICAL ERROR in schedulePostsStep:", error);
+    // Fallback to a simple scheduling approach if the main one fails
+    return fallbackScheduling(posts, timeFrame, currentDate);
+  }
 }
 
-/**
- * Deterministic scheduling algorithm that ensures posts are evenly distributed
- * across the entire time period according to platform-specific constraints
- */
-function schedulePostsEvenly(
+// Fallback scheduling function in case the main one fails
+function fallbackScheduling(
   posts: PostWithSeo[],
   timeFrame: CalendarViewType,
-  startDate: Date
+  currentDate: Date
 ): ScheduledPost[] {
+  console.log("USING FALLBACK SCHEDULING");
+  
+  // Simple scheduling logic that just spaces posts evenly
+  const result: ScheduledPost[] = [];
+  const safeDate = new Date(currentDate);
+  
+  // Use first day of the month for month planning
+  if (timeFrame === "month") {
+    safeDate.setDate(1);
+  }
+  
+  // Determine number of days to distribute posts over
+  const daysToDistribute = timeFrame === "month" ? 28 : (timeFrame === "week" ? 7 : 14);
+  
+  // Distribute posts evenly
+  for (let i = 0; i < posts.length; i++) {
+    const dayOffset = Math.floor((i / posts.length) * daysToDistribute);
+    const postDate = new Date(safeDate);
+    postDate.setDate(postDate.getDate() + dayOffset);
+    
+    // Set a reasonable time (between 9AM and 5PM)
+    postDate.setHours(9 + (i % 8), 0, 0, 0);
+    
+    result.push({
+      ...posts[i], // Preserve ALL properties, including title
+      posted_date: postDate
+    });
+  }
+  
+  return result.sort((a, b) => a.posted_date.getTime() - b.posted_date.getTime());
+}
+
+export function schedulePostsEvenly(
+  posts: PostWithSeo[],
+  timeFrame: CalendarViewType,
+  currentDate: Date
+): ScheduledPost[] {
+  console.log("SCHEDULING EVENLY - Start date:", currentDate.toISOString());
+  console.log("SCHEDULING EVENLY - First post title:", posts.length > 0 ? posts[0].title : "No posts");
+  
   // Group posts by platform
-  const postsByPlatform = new Map<string, PostWithSeo[]>();
+  const groupedPosts: Record<string, PostWithSeo[]> = {};
   
   for (const post of posts) {
-    const platform = post.platform.toLowerCase();
-    if (!postsByPlatform.has(platform)) {
-      postsByPlatform.set(platform, []);
+    if (!groupedPosts[post.platform]) {
+      groupedPosts[post.platform] = [];
     }
-    postsByPlatform.get(platform)!.push(post);
+    groupedPosts[post.platform].push(post);
   }
   
-  // Define end date based on time frame - IMPORTANT: ensure we use the full month
-  const endDate = getEndDateForTimeFrame(startDate, timeFrame);
+  // Platform scheduling configurations
+  const platformDays: Record<string, number[]> = {
+    Web: [0], // Sunday
+    LinkedIn: [1, 3], // Monday, Wednesday
+    Facebook: [2, 4], // Tuesday, Thursday
+    Instagram: [1, 5], // Monday, Friday
+    X: [2, 3], // Tuesday, Wednesday
+  };
   
-  console.log(`Scheduling time frame: ${timeFrame} from ${format(startDate, 'yyyy-MM-dd')} to ${format(endDate, 'yyyy-MM-dd')}`);
+  // Start and end dates for the planning period
+  let startDate = new Date(currentDate);
+  const endDate = new Date(startDate);
   
-  // For month view, ensure we start from the beginning of the month
-  let schedulingStartDate = new Date(startDate);
-  if (timeFrame === 'month' && startDate.getDate() > 1) {
-    schedulingStartDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-    console.log(`Reset start date to beginning of month: ${format(schedulingStartDate, 'yyyy-MM-dd')}`);
+  // Fix the dates for the time frame
+  if (timeFrame === "month") {
+    // Set to first day of the month
+    startDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
+    // Set to last day of the month
+    endDate.setFullYear(startDate.getFullYear(), startDate.getMonth() + 1, 0);
+  } else if (timeFrame === "week") {
+    endDate.setDate(startDate.getDate() + 6); // 7 days (0-6)
+  } else {
+    endDate.setDate(startDate.getDate() + 13); // 14 days (0-13)
   }
   
-  // Create week boundaries for the month
-  const weeks = groupDaysByWeek(schedulingStartDate, endDate);
-  console.log(`Month divided into ${weeks.length} weeks:`);
-  weeks.forEach((week, index) => {
-    console.log(`  Week ${index + 1}: ${format(week.start, 'yyyy-MM-dd')} to ${format(week.end, 'yyyy-MM-dd')}`);
-  });
+  console.log(`SCHEDULING EVENLY - Planning from ${startDate.toISOString()} to ${endDate.toISOString()}`);
   
-  // Calculate available days by platform and by week
-  const platformAvailableDaysByWeek = new Map<string, Map<number, Date[]>>();
-  
-  for (const platform of postsByPlatform.keys()) {
-    const constraints = getPlatformSchedulingConstraints(platform);
-    const allAvailableDays = getAvailableDaysInTimeFrame(
-      schedulingStartDate, 
-      endDate, 
-      constraints.validDays
-    );
-    
-    // Organize days by week
-    const daysByWeek = new Map<number, Date[]>();
-    for (let weekIndex = 0; weekIndex < weeks.length; weekIndex++) {
-      const { start: weekStart, end: weekEnd } = weeks[weekIndex];
-      
-      // Filter days that fall within this week
-      const daysInWeek = allAvailableDays.filter(day => 
-        day >= weekStart && day <= weekEnd
-      );
-      
-      daysByWeek.set(weekIndex, daysInWeek);
-    }
-    
-    platformAvailableDaysByWeek.set(platform, daysByWeek);
-    
-    // Log available days by week for this platform
-    console.log(`Platform ${platform} available days by week:`);
-    let totalDays = 0;
-    for (let weekIndex = 0; weekIndex < weeks.length; weekIndex++) {
-      const daysInWeek = daysByWeek.get(weekIndex) || [];
-      totalDays += daysInWeek.length;
-      console.log(`  Week ${weekIndex + 1}: ${daysInWeek.length} days`);
-    }
-    console.log(`  Total: ${totalDays} days across all weeks`);
-  }
-  
-  // Schedule posts according to the one-per-week-until-last-week strategy
   const scheduledPosts: ScheduledPost[] = [];
   
-  for (const [platform, platformPosts] of postsByPlatform.entries()) {
-    const daysByWeek = platformAvailableDaysByWeek.get(platform) || new Map();
-    const constraints = getPlatformSchedulingConstraints(platform);
+  // For each platform, find valid dates and schedule posts
+  Object.keys(groupedPosts).forEach(platform => {
+    const platformType = platform as string;
+    const posts = groupedPosts[platform];
+    console.log(`Platform ${platform} has ${posts.length} posts to schedule`);
     
-    if (daysByWeek.size === 0) {
-      console.warn(`No valid days found for ${platform} in the selected time frame`);
-      // Return unscheduled posts for this platform
-      for (const post of platformPosts) {
-        scheduledPosts.push({
-          ...post,
-          posted_date: format(startDate, 'yyyy-MM-dd'),
-          status: 'SUGGESTED'
-        });
+    // Get valid days for this platform
+    const validDays = platformDays[platformType] || [0, 1, 2, 3, 4, 5, 6]; // Default to all days
+    console.log(`Platform ${platform} valid days:`, validDays);
+    
+    // Find all valid dates in the range
+    const validDates: Date[] = [];
+    const currentDay = new Date(startDate);
+    
+    while (currentDay <= endDate) {
+      if (validDays.includes(currentDay.getDay())) {
+        validDates.push(new Date(currentDay));
       }
-      continue;
+      currentDay.setDate(currentDay.getDate() + 1);
     }
     
-    // Calculate how many posts to schedule in each week
-    const postDistribution = calculateWeeklyPostDistribution(
-      platformPosts.length, 
-      daysByWeek, 
-      weeks.length
-    );
+    console.log(`Platform ${platform} has ${validDates.length} valid dates in range`);
     
-    console.log(`Platform ${platform}: ${platformPosts.length} posts distributed as:`);
-    postDistribution.forEach((count, weekIndex) => {
-      console.log(`  Week ${weekIndex + 1}: ${count} posts`);
-    });
-    
-    // Schedule posts based on the calculated distribution
-    let postIndex = 0;
-    for (let weekIndex = 0; weekIndex < weeks.length && postIndex < platformPosts.length; weekIndex++) {
-      const postsForThisWeek = postDistribution.get(weekIndex) || 0;
-      const availableDaysInWeek = daysByWeek.get(weekIndex) || [];
-      
-      if (availableDaysInWeek.length === 0) {
-        console.warn(`No available days in week ${weekIndex + 1} for platform ${platform}`);
-        continue;
-      }
-      
-      // Schedule posts for this week
-      for (let i = 0; i < postsForThisWeek && postIndex < platformPosts.length; i++) {
-        const post = platformPosts[postIndex];
-        
-        // Pick a day from available days in this week
-        const dayIndex = i % availableDaysInWeek.length;
-        const selectedDay = availableDaysInWeek[dayIndex];
-        
-        // For multiple posts on the same day, stagger the times
-        const postsOnThisDay = Math.floor(i / availableDaysInWeek.length);
-        const time = getTimeForPlatformAndPosition(platform, postsOnThisDay, constraints.validHours);
-        
-        // Add time to description for now (later this will be in the database)
-        const updatedDescription = post.elaboration.content || post.concept;
-        const descriptionWithTime = `[Scheduled at ${time}] ${updatedDescription}`;
-        
-        scheduledPosts.push({
-          ...post,
-          posted_date: format(selectedDay, 'yyyy-MM-dd'),
-          description: descriptionWithTime,
-          status: 'SUGGESTED'
-        });
-        
-        postIndex++;
+    if (validDates.length === 0) {
+      console.log(`WARNING: No valid dates for platform ${platform} - using all days instead`);
+      // Fallback: use all days if no valid dates
+      const currentDay = new Date(startDate);
+      while (currentDay <= endDate) {
+        validDates.push(new Date(currentDay));
+        currentDay.setDate(currentDay.getDate() + 1);
       }
     }
-  }
+    
+    // Schedule posts - distribute evenly
+    for (let i = 0; i < posts.length; i++) {
+      // Pick a date using modulo to distribute evenly
+      const dateIndex = i % validDates.length;
+      const postDate = new Date(validDates[dateIndex]);
+      
+      // Set a random time between 9 AM and 5 PM
+      postDate.setHours(9 + Math.floor(Math.random() * 8), Math.floor(Math.random() * 60), 0, 0);
+      
+      // Create scheduled post with ALL original properties
+      scheduledPosts.push({
+        ...posts[i],
+        posted_date: postDate
+      });
+      
+      console.log(`Scheduled "${posts[i].title}" for ${postDate.toISOString()}`);
+    }
+  });
   
-  // Check distribution quality
-  validateDistribution(scheduledPosts);
-  
-  return scheduledPosts;
+  // Sort by date
+  return scheduledPosts.sort((a, b) => a.posted_date.getTime() - b.posted_date.getTime());
 }
 
 /**
