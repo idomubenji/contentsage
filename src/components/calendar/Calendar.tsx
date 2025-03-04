@@ -67,7 +67,10 @@ export default function Calendar() {
   };
   
   const resetToToday = () => {
-    setCurrentDate(new Date());
+    // Create a new date and set it to UTC midnight
+    const nowUTC = new Date();
+    nowUTC.setUTCHours(0, 0, 0, 0);
+    setCurrentDate(nowUTC);
   };
   
   // Format the header title based on the current view

@@ -660,8 +660,8 @@ export function schedulePostsEvenly(
     platformConstraints[platform] = getPlatformSchedulingConstraints(platform);
   });
   
-  // Start and end dates for the planning period
-  let startDate = new Date(currentDate);
+  // Start and end dates for the planning period - make a proper copy of the date
+  let startDate = new Date(currentDate.getTime());
   let endDate = getEndDateForTimeFrame(startDate, timeFrame);
   
   console.log(`SCHEDULING EVENLY - Planning from ${startDate.toISOString()} to ${endDate.toISOString()}`);
@@ -861,6 +861,15 @@ function getPlatformSchedulingConstraints(platform: string): {
         validHours: { start: 9, end: 17 } // 9 AM to 5 PM
       };
     case 'x':
+      return {
+        validDays: [1, 2], // Monday and Tuesday
+        validHours: { start: 10, end: 13 } // 10 AM to 1 PM
+      };
+      case '𝕏':
+        return {
+          validDays: [1, 2], // Monday and Tuesday
+          validHours: { start: 10, end: 13 } // 10 AM to 1 PM
+        };
     case 'twitter':
       return {
         validDays: [1, 2], // Monday and Tuesday
@@ -897,16 +906,8 @@ function getAvailableDaysInTimeFrame(
   // Create a copy of the start date to avoid modifying the original
   const currentDay = new Date(startDate);
   
-  // Ensure we're starting from the 1st day of the month for 'month' timeframe
-  // This is critical to distribute across the full month
-  if (startDate.getMonth() === endDate.getMonth() && 
-      startDate.getFullYear() === endDate.getFullYear() &&
-      startDate.getDate() > 1) {
-    // We're in a month timeframe - make sure we include the full month
-    // by resetting to the 1st day of the month
-    currentDay.setDate(1);
-    console.log(`Resetting start day to beginning of month: ${format(currentDay, 'yyyy-MM-dd')}`);
-  }
+  // Note: We no longer need to adjust the start day here since 
+  // getEndDateForTimeFrame now properly sets the date range for the entire month
   
   // Log the range we're checking
   console.log(`Finding available days from ${format(currentDay, 'yyyy-MM-dd')} to ${format(endDate, 'yyyy-MM-dd')} for days: ${validDays.join(', ')}`);
@@ -1026,15 +1027,20 @@ function getEndDateForTimeFrame(startDate: Date, timeFrame: CalendarViewType): D
     endDate.setDate(startDate.getDate() + 6);
   } else if (timeFrame === 'month') {
     // For month view:
-    // If we're in the middle of a month, we want to include the full month
-    // Get the last day of the month
+    // Always include the full month - first set to the first day of the month
     const year = startDate.getFullYear();
     const month = startDate.getMonth();
+    
+    // Start from the first day of the month
+    const firstDayOfMonth = new Date(year, month, 1);
     
     // Last day of current month
     endDate = new Date(year, month + 1, 0);
     
-    console.log(`Month timeframe: Using end date ${format(endDate, 'yyyy-MM-dd')} for start date ${format(startDate, 'yyyy-MM-dd')}`);
+    // Update the startDate reference to be the first day of the month
+    startDate.setDate(1);
+    
+    console.log(`Month timeframe: Using full month from ${format(firstDayOfMonth, 'yyyy-MM-dd')} to ${format(endDate, 'yyyy-MM-dd')}`);
   } else {
     // Default to 30 days ahead
     endDate = new Date(startDate);

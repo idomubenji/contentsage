@@ -88,17 +88,13 @@ export default function PlannerModal({ isOpen, onClose, timeFrame, currentDate }
   const [selectedOrganization, setSelectedOrganization] = useState<Organization | null>(null);
   const [organizationLoading, setOrganizationLoading] = useState(true);
   
-  // Add a debug state to help with troubleshooting
-  const [debugMessages, setDebugMessages] = useState<string[]>([]);
-  
   // Add state for regeneration
   const [regeneratingPostIndex, setRegeneratingPostIndex] = useState<number | null>(null);
   const [regenerationError, setRegenerationError] = useState<string | null>(null);
   
-  // Helper function to add debug messages
-  const addDebug = (message: string) => {
+  // Helper function for internal logging only
+  const logDebug = (message: string) => {
     console.log('[DEBUG]', message);
-    setDebugMessages(prev => [...prev.slice(-9), message]);
   };
   
   // Fetch the user's organizations when the component mounts
@@ -249,32 +245,32 @@ export default function PlannerModal({ isOpen, onClose, timeFrame, currentDate }
       
       // Generate a unique chainId that will be used for both SSE and the API request
       const chainId = Date.now().toString();
-      addDebug(`Generated chainId: ${chainId}`);
+      logDebug(`Generated chainId: ${chainId}`);
       
       // Establish SSE connection first, before making the POST request
-      addDebug('Setting up SSE connection for post generation...');
+      logDebug('Setting up SSE connection for post generation...');
       
       // Create EventSource with our generated chainId
       const eventSource = new EventSource(`/api/post-generation-chain?chainId=${chainId}`);
       
       // Add an open event handler
       eventSource.onopen = () => {
-        addDebug(`SSE connection opened successfully for chainId: ${chainId}`);
+        logDebug(`SSE connection opened successfully for chainId: ${chainId}`);
       };
       
       // Enhanced message event handler with debugging
       eventSource.onmessage = (event) => {
         try {
-          addDebug(`SSE message received: ${event.data.slice(0, 100)}...`);
+          logDebug(`SSE message received: ${event.data.slice(0, 100)}...`);
           const data = JSON.parse(event.data);
           
           // Verify this is for our chain
           if (data.chainId && data.chainId !== chainId) {
-            addDebug(`Warning: Received update for wrong chain: ${data.chainId}, expected: ${chainId}`);
+            logDebug(`Warning: Received update for wrong chain: ${data.chainId}, expected: ${chainId}`);
             return;
           }
           
-          addDebug(`Chain update: ${data.step} - ${data.progress}%`);
+          logDebug(`Chain update: ${data.step} - ${data.progress}%`);
           
           // Update chain state in UI with a callback to ensure it's applied
           setChainState(prevState => {
@@ -285,13 +281,13 @@ export default function PlannerModal({ isOpen, onClose, timeFrame, currentDate }
               error: data.error
             };
             
-            addDebug(`UI state updated: ${newState.step} - ${newState.progress}%`);
+            logDebug(`UI state updated: ${newState.step} - ${newState.progress}%`);
             return newState;
           });
           
           // If we have posts directly in the update, save them
           if (data.posts && Array.isArray(data.posts) && data.posts.length > 0) {
-            addDebug(`Received ${data.posts.length} posts in SSE update`);
+            logDebug(`Received ${data.posts.length} posts in SSE update`);
             
             // Process posts to ensure all object properties are stringified
             const processedPosts = data.posts.map((post: PostSuggestion) => ({
@@ -306,7 +302,7 @@ export default function PlannerModal({ isOpen, onClose, timeFrame, currentDate }
           
           // Handle completion
           if (data.step === 'complete' || !data.isGenerating) {
-            addDebug('Chain process complete, closing SSE connection');
+            logDebug('Chain process complete, closing SSE connection');
             
             // Close the connection
             eventSource.close();
@@ -320,27 +316,27 @@ export default function PlannerModal({ isOpen, onClose, timeFrame, currentDate }
             
             // If we still don't have posts, make a final check with the API
             if (!suggestions.length) {
-              addDebug('No posts received yet, fetching from API');
+              logDebug('No posts received yet, fetching from API');
               fetchFinalPosts(chainId);
             }
           }
           
           // Handle error
           if (data.step === 'error' || data.error) {
-            addDebug(`Error in chain: ${data.error || 'Unknown error'}`);
+            logDebug(`Error in chain: ${data.error || 'Unknown error'}`);
             setError(data.error || 'An error occurred during post generation');
             eventSource.close();
           }
         } catch (error) {
           console.error('Error processing SSE message:', error, event.data);
-          addDebug(`Error processing SSE: ${error}`);
+          logDebug(`Error processing SSE: ${error}`);
         }
       };
       
       // Enhanced error event handler
       eventSource.onerror = (error) => {
         console.error('SSE connection error:', error);
-        addDebug(`SSE connection error: ${(error as any)?.message || 'Unknown error'}`);
+        logDebug(`SSE connection error: ${(error as any)?.message || 'Unknown error'}`);
         
         // Only handle serious errors (e.g., when the connection fails completely)
         if ((error as any).target?.readyState === EventSource.CLOSED) {
@@ -355,7 +351,7 @@ export default function PlannerModal({ isOpen, onClose, timeFrame, currentDate }
       };
       
       // Now make the POST request to start the chain process, passing our chainId
-      addDebug(`Making POST request with chainId: ${chainId}`);
+      logDebug(`Making POST request with chainId: ${chainId}`);
       const response = await fetch('/api/post-generation-chain', {
         method: 'POST',
         headers: {
@@ -375,7 +371,7 @@ export default function PlannerModal({ isOpen, onClose, timeFrame, currentDate }
       
       try {
         responseData = await response.json();
-        addDebug(`API response received: ${response.status}`);
+        logDebug(`API response received: ${response.status}`);
       } catch (parseError) {
         console.error('Error parsing API response:', parseError);
         throw new Error('Failed to parse server response');
@@ -390,7 +386,7 @@ export default function PlannerModal({ isOpen, onClose, timeFrame, currentDate }
       
       // If we have an immediate response with posts, use them
       if (responseData.posts && Array.isArray(responseData.posts) && responseData.posts.length > 0) {
-        addDebug(`Using ${responseData.posts.length} posts from initial response`);
+        logDebug(`Using ${responseData.posts.length} posts from initial response`);
         
         const processedPosts = responseData.posts.map((post: PostSuggestion) => ({
           ...post,
@@ -413,7 +409,7 @@ export default function PlannerModal({ isOpen, onClose, timeFrame, currentDate }
       }
     } catch (err) {
       console.error('Error generating plan:', err);
-      addDebug(`Error: ${err}`);
+      logDebug(`Error: ${err}`);
       setError(err instanceof Error ? err.message : 'Failed to generate post ideas');
       
       // Update chain state to error
@@ -428,30 +424,30 @@ export default function PlannerModal({ isOpen, onClose, timeFrame, currentDate }
   // Helper function to fetch posts for a chain ID if they weren't received via SSE
   const fetchFinalPosts = async (chainId: string) => {
     try {
-      addDebug(`Fetching final posts for chain ${chainId} from API`);
+      logDebug(`Fetching final posts for chain ${chainId} from API`);
       const response = await fetch(`/api/chain-results?chainId=${chainId}`);
       
       let data;
       try {
         data = await response.json();
-        addDebug(`Chain results API response received`);
+        logDebug(`Chain results API response received`);
       } catch (parseError) {
         console.error('Error parsing chain results response:', parseError);
-        addDebug(`Error parsing API response: ${parseError}`);
+        logDebug(`Error parsing API response: ${parseError}`);
         setError('Failed to parse response from server');
         return;
       }
       
       if (!response.ok) {
         console.error('Failed to fetch final posts:', response.status, response.statusText, data);
-        addDebug(`API error: ${response.status} - ${data?.error || 'Unknown error'}`);
+        logDebug(`API error: ${response.status} - ${data?.error || 'Unknown error'}`);
         setError(data?.error || `Failed to fetch posts: ${response.status}`);
         return;
       }
       
       if (data.posts && Array.isArray(data.posts)) {
         if (data.posts.length > 0) {
-          addDebug(`Setting ${data.posts.length} posts from API response`);
+          logDebug(`Setting ${data.posts.length} posts from API response`);
           
           // Process posts to ensure all object properties are stringified
           const processedPosts = data.posts.map((post: PostSuggestion) => ({
@@ -470,17 +466,17 @@ export default function PlannerModal({ isOpen, onClose, timeFrame, currentDate }
             progress: 100
           });
         } else {
-          addDebug('API returned empty posts array');
+          logDebug('API returned empty posts array');
           setError('No posts were generated. Please try again.');
         }
       } else {
         console.error('Invalid or missing posts in API response:', data);
-        addDebug(`Invalid API response: missing posts array`);
+        logDebug(`Invalid API response: missing posts array`);
         setError('Invalid response from server. Please try again.');
       }
     } catch (error) {
       console.error('Error fetching final posts:', error);
-      addDebug(`Error fetching posts: ${error}`);
+      logDebug(`Error fetching posts: ${error}`);
       setError('Failed to retrieve generated posts. Please try again.');
     }
   };
@@ -490,7 +486,7 @@ export default function PlannerModal({ isOpen, onClose, timeFrame, currentDate }
     return () => {
       // Clean up any EventSource connections when component unmounts
       if (typeof window !== 'undefined') {
-        addDebug("Component unmounting, ensuring connections are closed");
+        logDebug("Component unmounting, ensuring connections are closed");
       }
     };
   }, []);
@@ -685,14 +681,14 @@ export default function PlannerModal({ isOpen, onClose, timeFrame, currentDate }
         const updatedSuggestions = [...suggestions];
         updatedSuggestions[postIndex] = data.regeneratedPost;
         setSuggestions(updatedSuggestions);
-        addDebug(`Successfully regenerated post: ${data.regeneratedPost.title}`);
+        logDebug(`Successfully regenerated post: ${data.regeneratedPost.title}`);
       } else {
         throw new Error('Regeneration response missing data');
       }
     } catch (error) {
       console.error('Error regenerating post:', error);
       setRegenerationError(error instanceof Error ? error.message : 'Unknown error occurred');
-      addDebug(`Error regenerating post: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      logDebug(`Error regenerating post: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       // Clear regenerating state
       setRegeneratingPostIndex(null);
@@ -1006,18 +1002,6 @@ export default function PlannerModal({ isOpen, onClose, timeFrame, currentDate }
                 ></textarea>
               </div>
             </div>
-          </div>
-        )}
-        
-        {/* Debug messages in development */}
-        {process.env.NODE_ENV === 'development' && debugMessages.length > 0 && (
-          <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 text-xs font-mono overflow-auto max-h-32 bg-gray-50 dark:bg-gray-800">
-            <h4 className="font-semibold mb-1">Debug Messages:</h4>
-            <ul className="space-y-1 text-gray-600 dark:text-gray-400">
-              {debugMessages.map((msg, i) => (
-                <li key={i}>{msg}</li>
-              ))}
-            </ul>
           </div>
         )}
         

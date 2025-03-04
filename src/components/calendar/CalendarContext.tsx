@@ -65,7 +65,8 @@ const getStoredDate = (): Date => {
   if (typeof window === 'undefined') {
     // Use the first day of the current month to avoid date-specific issues
     const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
+    // Use UTC date to ensure GMT timezone
+    return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
   }
   
   try {
@@ -77,10 +78,10 @@ const getStoredDate = (): Date => {
     console.error('Error reading date from localStorage:', error);
   }
   
-  // For client-side with no stored date, use the first day of current month
+  // For client-side with no stored date, use the first day of current month in UTC
   // to maintain consistency with server-side rendering
   const now = new Date();
-  return new Date(now.getFullYear(), now.getMonth(), 1);
+  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
 };
 
 // Helper to get stored view from localStorage
@@ -116,9 +117,12 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
 
   // Override setCurrentDate to also persist to localStorage
   const setCurrentDate = (date: Date) => {
-    // Normalize date by setting it to midnight to avoid time-based issues
-    const normalizedDate = new Date(date);
-    normalizedDate.setHours(0, 0, 0, 0);
+    // Normalize date by setting it to midnight in UTC to avoid time-based issues
+    const normalizedDate = new Date(Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate()
+    ));
     
     setCurrentDateState(normalizedDate);
     
@@ -351,32 +355,68 @@ export function CalendarProvider({ children }: { children: React.ReactNode }) {
   };
 
   const getPostsForDate = (date: Date) => {
-    const dateString = format(date, 'yyyy-MM-dd');
-    return posts.filter(post => {
-      if (!post.posted_date) return false;
-      
-      // Handle both string dates and Date objects
-      const postDate = format(new Date(post.posted_date), 'yyyy-MM-dd');
-      return postDate === dateString;
-    });
-  };
-
-  const getPostsForMonth = (date: Date) => {
-    const monthStart = startOfMonth(date);
-    const monthEnd = endOfMonth(date);
+    // Create UTC date for consistent comparison
+    const utcDate = new Date(Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate()
+    ));
+    const dateString = format(utcDate, 'yyyy-MM-dd');
     
     return posts.filter(post => {
       if (!post.posted_date) return false;
       
-      const postDate = new Date(post.posted_date);
-      return postDate >= monthStart && postDate <= monthEnd;
+      // Convert post date to UTC for consistent comparison
+      const postDateObj = new Date(post.posted_date);
+      const utcPostDate = new Date(Date.UTC(
+        postDateObj.getUTCFullYear(),
+        postDateObj.getUTCMonth(),
+        postDateObj.getUTCDate()
+      ));
+      const postDateString = format(utcPostDate, 'yyyy-MM-dd');
+      
+      return postDateString === dateString;
+    });
+  };
+
+  const getPostsForMonth = (date: Date) => {
+    // Create UTC date for the current date
+    const utcDate = new Date(Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate()
+    ));
+    
+    // Get month boundaries in UTC
+    const monthStart = startOfMonth(utcDate);
+    const monthEnd = endOfMonth(utcDate);
+    
+    return posts.filter(post => {
+      if (!post.posted_date) return false;
+      
+      // Convert post date to UTC for comparison
+      const postDateObj = new Date(post.posted_date);
+      const utcPostDate = new Date(Date.UTC(
+        postDateObj.getUTCFullYear(), 
+        postDateObj.getUTCMonth(), 
+        postDateObj.getUTCDate()
+      ));
+      
+      return utcPostDate >= monthStart && utcPostDate <= monthEnd;
     });
   };
 
   const getPostsForWeek = (date: Date) => {
-    // Get start and end of the week
-    const weekStart = startOfWeek(date);
-    const weekEnd = endOfWeek(date);
+    // Create UTC date for the current date
+    const utcDate = new Date(Date.UTC(
+      date.getUTCFullYear(),
+      date.getUTCMonth(),
+      date.getUTCDate()
+    ));
+    
+    // Get week boundaries in UTC
+    const weekStart = startOfWeek(utcDate, { weekStartsOn: 0 });
+    const weekEnd = endOfWeek(utcDate, { weekStartsOn: 0 });
     
     // Get all days in the week
     const weekDays = eachDayOfInterval({
