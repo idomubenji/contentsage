@@ -717,18 +717,18 @@ export default function PlannerModal({ isOpen, onClose, timeFrame, currentDate }
         
         {/* Organization Selection Section - Always visible */}
         <div className="bg-white dark:bg-gray-800 rounded-lg shadow p-4">
-          <h3 className="text-lg font-medium mb-2">Select Organization</h3>
+          <h3 className="text-lg font-medium mb-2 dark:text-white">Select Organization</h3>
           {organizationLoading ? (
             <div className="flex items-center space-x-2">
               <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
-              <span className="text-gray-500">Loading organizations...</span>
+              <span className="text-gray-500 dark:text-gray-400">Loading organizations...</span>
             </div>
           ) : (
             <div className="max-w-md">
               <select
                 value={selectedOrganization?.id || ''}
                 onChange={handleOrganizationChange}
-                className="w-full border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-gray-300 dark:border-gray-600 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
                 disabled={organizations.length <= 1 || chainState.isGenerating}
               >
                 {organizations.map(org => (
@@ -740,7 +740,7 @@ export default function PlannerModal({ isOpen, onClose, timeFrame, currentDate }
                   <option value="" disabled>No organizations available</option>
                 )}
               </select>
-              <p className="text-sm text-gray-500 mt-1">
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                 Select the organization you want to generate content for
               </p>
             </div>

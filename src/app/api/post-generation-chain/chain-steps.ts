@@ -129,6 +129,7 @@ export async function generatePostIdeasStep(
     - If there are more social posts requested than blog posts, create original social posts that aren't derived from blogs
     - Ensure a diverse mix of topics across all platforms
     - DO NOT generate posts for platforms that weren't requested
+    - NEVER use hashtags. They are outdated.
     
     ${organizationContext}
     

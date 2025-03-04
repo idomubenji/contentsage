@@ -234,17 +234,17 @@ export default function PlannerChainModal({
   
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-        <h2 className="text-2xl font-bold mb-4">
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-3xl max-h-[90vh] overflow-y-auto">
+        <h2 className="text-2xl font-bold mb-4 dark:text-white">
           Generate Content Plan for {timeFrame}
         </h2>
         
         {/* Platform selection */}
         <div className="mb-6">
-          <h3 className="text-lg font-semibold mb-2">How many posts do you want?</h3>
+          <h3 className="text-lg font-semibold mb-2 dark:text-white">How many posts do you want?</h3>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             {platformSettings.map((platform) => (
-              <div key={platform.platform} className="border rounded-lg p-3">
+              <div key={platform.platform} className="border dark:border-gray-700 rounded-lg p-3 dark:bg-gray-700">
                 <div className="flex items-center mb-2">
                   {platform.logo && (
                     <img 
@@ -253,7 +253,7 @@ export default function PlannerChainModal({
                       className="w-6 h-6 mr-2" 
                     />
                   )}
-                  <span className="font-medium">{platform.platform}</span>
+                  <span className="font-medium dark:text-white">{platform.platform}</span>
                 </div>
                 <input
                   type="number"
@@ -261,7 +261,7 @@ export default function PlannerChainModal({
                   max={platform.max || 10}
                   value={platform.count}
                   onChange={(e) => handleCountChange(platform.platform, parseInt(e.target.value) || 0)}
-                  className="w-full border rounded p-2"
+                  className="w-full border dark:border-gray-600 rounded p-2 dark:bg-gray-600 dark:text-white"
                   disabled={chainState.isGenerating}
                 />
               </div>
@@ -271,12 +271,12 @@ export default function PlannerChainModal({
         
         {/* Custom prompt */}
         <div className="mb-6">
-          <h3 className="text-lg font-semibold mb-2">Any specific focus or themes?</h3>
+          <h3 className="text-lg font-semibold mb-2 dark:text-white">Any specific focus or themes?</h3>
           <textarea
             value={customPrompt}
             onChange={(e) => setCustomPrompt(e.target.value)}
             placeholder="E.g., product launch, industry trends, customer success stories..."
-            className="w-full border rounded p-2 h-24"
+            className="w-full border dark:border-gray-600 rounded p-2 h-24 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
             disabled={chainState.isGenerating}
           />
         </div>
@@ -284,16 +284,16 @@ export default function PlannerChainModal({
         {/* Progress indicator */}
         {chainState.isGenerating && (
           <div className="mb-6">
-            <h3 className="text-lg font-semibold mb-2">
+            <h3 className="text-lg font-semibold mb-2 dark:text-white">
               {getStepLabel(chainState.step)}
             </h3>
-            <div className="w-full bg-gray-200 rounded-full h-4">
+            <div className="w-full bg-gray-200 dark:bg-gray-600 rounded-full h-4">
               <div 
                 className="bg-blue-600 h-4 rounded-full transition-all duration-300"
                 style={{ width: `${chainState.progress}%` }}
               />
             </div>
-            <p className="text-sm text-gray-600 mt-1">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
               {chainState.progress}% complete
             </p>
           </div>
@@ -301,7 +301,7 @@ export default function PlannerChainModal({
         
         {/* Error message */}
         {chainState.error && (
-          <div className="mb-6 p-3 bg-red-100 border border-red-300 rounded text-red-700">
+          <div className="mb-6 p-3 bg-red-100 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded text-red-700 dark:text-red-300">
             {chainState.error}
           </div>
         )}
@@ -309,21 +309,21 @@ export default function PlannerChainModal({
         {/* Generated posts preview */}
         {generatedPosts.length > 0 && chainState.step === 'complete' && (
           <div className="mb-6">
-            <h3 className="text-lg font-semibold mb-2">Generated Posts</h3>
-            <div className="max-h-60 overflow-y-auto border rounded p-3">
+            <h3 className="text-lg font-semibold mb-2 dark:text-white">Generated Posts</h3>
+            <div className="max-h-60 overflow-y-auto border dark:border-gray-700 rounded p-3 dark:bg-gray-700">
               {generatedPosts.map((post, index) => (
-                <div key={index} className="mb-3 pb-3 border-b last:border-b-0">
+                <div key={index} className="mb-3 pb-3 border-b dark:border-gray-600 last:border-b-0">
                   <div className="flex justify-between">
-                    <span className="font-medium">{post.title}</span>
-                    <span className="text-sm bg-gray-200 px-2 py-1 rounded">
+                    <span className="font-medium dark:text-white">{post.title}</span>
+                    <span className="text-sm bg-gray-200 dark:bg-gray-600 dark:text-gray-200 px-2 py-1 rounded">
                       {post.platform}
                     </span>
                   </div>
-                  <p className="text-sm text-gray-600 mt-1">
+                  <p className="text-sm text-gray-600 dark:text-gray-300 mt-1">
                     {post.description.substring(0, 100)}
                     {post.description.length > 100 ? '...' : ''}
                   </p>
-                  <div className="text-xs text-gray-500 mt-1">
+                  <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {new Date(post.posted_date).toLocaleDateString()} at {new Date(post.posted_date).toLocaleTimeString()}
                   </div>
                 </div>
@@ -336,7 +336,7 @@ export default function PlannerChainModal({
         <div className="flex justify-end space-x-3">
           <button
             onClick={onClose}
-            className="px-4 py-2 border rounded"
+            className="px-4 py-2 border dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white"
             disabled={chainState.isGenerating}
           >
             Cancel
@@ -345,7 +345,7 @@ export default function PlannerChainModal({
           {generatedPosts.length === 0 || chainState.step !== 'complete' ? (
             <button
               onClick={handleGeneratePlan}
-              className="px-4 py-2 bg-blue-600 text-white rounded"
+              className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
               disabled={chainState.isGenerating}
             >
               {chainState.isGenerating ? 'Generating...' : 'Generate Plan'}
@@ -353,7 +353,7 @@ export default function PlannerChainModal({
           ) : (
             <button
               onClick={handleSavePlan}
-              className="px-4 py-2 bg-green-600 text-white rounded"
+              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
             >
               Save Plan
             </button>
