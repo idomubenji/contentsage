@@ -847,11 +847,6 @@ function getPlatformSchedulingConstraints(platform: string): {
         validDays: [2, 3, 4], // Tuesday, Wednesday, Thursday
         validHours: { start: 10, end: 14 } // 10 AM to 2 PM
       };
-    case 'facebook':
-      return {
-        validDays: [1, 3, 5], // Monday, Wednesday, Friday
-        validHours: { start: 9, end: 17 } // 9 AM to 5 PM
-      };
     default:
       return {
         validDays: [1, 2, 3, 4, 5], // Weekdays

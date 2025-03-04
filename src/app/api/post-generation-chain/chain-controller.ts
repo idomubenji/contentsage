@@ -36,7 +36,7 @@ const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // Define the Platform type based on available platforms
-type Platform = 'x' | 'linkedin' | 'instagram' | 'facebook' | 'web';
+type Platform = 'x' | 'linkedin' | 'instagram' | 'web';
 
 // Define scheduling constraints interface
 interface PlatformSchedulingConstraint {

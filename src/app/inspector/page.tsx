@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
@@ -389,6 +390,8 @@ export default function Inspector() {
   
   // Edit state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isInfoModalOpen, setIsInfoModalOpen] = useState(false);
+  const [currentInfoPost, setCurrentInfoPost] = useState<Post | null>(null);
   const [editingPost, setEditingPost] = useState<Post | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   
@@ -576,7 +579,7 @@ export default function Inspector() {
   useEffect(() => {
     const handleOutsideClick = (e: MouseEvent) => {
       // Skip if modals are open or if the click is inside the table
-      if (isEditModalOpen || isDeleteModalOpen) return;
+      if (isEditModalOpen || isDeleteModalOpen || isInfoModalOpen) return;
       
       // If the click is outside the table, clear highlighting
       if (tableRef.current && !tableRef.current.contains(e.target as Node)) {
@@ -587,7 +590,7 @@ export default function Inspector() {
     
     document.addEventListener('mousedown', handleOutsideClick);
     return () => document.removeEventListener('mousedown', handleOutsideClick);
-  }, [isEditModalOpen, isDeleteModalOpen]);
+  }, [isEditModalOpen, isDeleteModalOpen, isInfoModalOpen]);
   
   // Handle keyboard shortcuts for the edit modal
   useEffect(() => {
@@ -633,7 +636,7 @@ export default function Inspector() {
   // Handle keyboard navigation and selection
   useEffect(() => {
     // Only enable keyboard navigation when there are posts and no modals are open
-    if (posts.length === 0 || isEditModalOpen || isDeleteModalOpen) return;
+    if (posts.length === 0 || isEditModalOpen || isDeleteModalOpen || isInfoModalOpen) return;
     
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if we're in an input element or textarea
@@ -742,7 +745,8 @@ export default function Inspector() {
     lastSelectedIndex, 
     selectedPosts, 
     isEditModalOpen, 
-    isDeleteModalOpen
+    isDeleteModalOpen,
+    isInfoModalOpen
   ]);
   
   // Reset focus and selection state when page changes
@@ -797,12 +801,12 @@ export default function Inspector() {
         // Extract unique format and platform values for filters
         if (data) {
           const formats = Array.from(new Set(data
-            .map(post => post.format?.toLowerCase() || '')
+            .map((post: Post) => post.format?.toLowerCase() || '')
             .filter(Boolean)))
             .sort();
           
           const platforms = Array.from(new Set(data
-            .map(post => post.platform?.toLowerCase() || '')
+            .map((post: Post) => post.platform?.toLowerCase() || '')
             .filter(Boolean)))
             .sort();
           
@@ -1007,6 +1011,126 @@ export default function Inspector() {
     );
   };
 
+  // Handle showing info for a post
+  const handleShowInfo = (postId: string) => {
+    const post = posts.find(p => p.id === postId);
+    if (post) {
+      setCurrentInfoPost(post);
+      setIsInfoModalOpen(true);
+    }
+  };
+
+  // Format SEO info into readable bullet points
+  const formatSeoInfo = (info: any, level = 0, parentKey: string = ''): React.ReactElement => {
+    if (!info) return <></>;
+    
+    // Define keys to handle specially - we want to hide these top level keys
+    // but display their nested content
+    const specialKeys = ['reasonsData', 'reasons'];
+    
+    // Define keys to completely exclude from display
+    const excludedKeys = ['aiConfidence'];
+    
+    // Handle strings, numbers, booleans, null
+    if (typeof info !== 'object') {
+      return <span>{String(info)}</span>;
+    }
+    
+    // Handle null
+    if (info === null) {
+      return <span>null</span>;
+    }
+    
+    // Handle arrays
+    if (Array.isArray(info)) {
+      return (
+        <ul className="list-disc ml-4">
+          {info.map((item, index) => (
+            <li key={index} className="mb-1">
+              {formatSeoInfo(item, level + 1, parentKey)}
+            </li>
+          ))}
+        </ul>
+      );
+    }
+    
+    // Check if this is a special key that we should unwrap
+    if (specialKeys.includes(parentKey) && level === 1) {
+      // Just return the values without the key
+      return (
+        <>
+          {Object.entries(info)
+            .filter(([key]) => !excludedKeys.includes(key))
+            .map(([key, value], index) => (
+              <React.Fragment key={index}>
+                {typeof value === 'object' && value !== null ? (
+                  formatSeoInfo(value, level, key)
+                ) : (
+                  <div className="mb-1">
+                    <span className="font-medium">{key}: </span>
+                    <span>{String(value)}</span>
+                  </div>
+                )}
+              </React.Fragment>
+            ))}
+        </>
+      );
+    }
+    
+    // Handle special keys at top level - unwrap their content
+    if (level === 0) {
+      const regularEntries = Object.entries(info)
+        .filter(([key]) => !specialKeys.includes(key) && !excludedKeys.includes(key));
+      const specialEntries = Object.entries(info)
+        .filter(([key]) => specialKeys.includes(key));
+      
+      return (
+        <>
+          {/* Regular entries with normal formatting */}
+          <ul className="space-y-2">
+            {regularEntries.map(([key, value], index) => (
+              <li key={index} className="mb-1">
+                <span className="font-medium">{key}: </span>
+                {typeof value === 'object' && value !== null ? (
+                  formatSeoInfo(value, level + 1, key)
+                ) : (
+                  <span>{String(value)}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+          
+          {/* Special entries with their content unwrapped */}
+          {specialEntries.map(([key, value]) => (
+            <div key={key}>
+              {typeof value === 'object' && value !== null && (
+                formatSeoInfo(value, level + 1, key)
+              )}
+            </div>
+          ))}
+        </>
+      );
+    }
+    
+    // Regular object display for non-special cases
+    return (
+      <ul className={level === 0 ? "space-y-2" : "list-disc ml-4 space-y-1"}>
+        {Object.entries(info)
+          .filter(([key]) => !excludedKeys.includes(key))
+          .map(([key, value], index) => (
+            <li key={index} className="mb-1">
+              <span className="font-medium">{key}: </span>
+              {typeof value === 'object' && value !== null ? (
+                formatSeoInfo(value, level + 1, key)
+              ) : (
+                <span>{String(value)}</span>
+              )}
+            </li>
+          ))}
+      </ul>
+    );
+  };
+
   return (
     <div className="p-8">
       <h1 className="text-3xl font-bold mb-6 dark:text-white">Content Inspector</h1>
@@ -1184,7 +1308,7 @@ export default function Inspector() {
                             }
                           }
                         }}
-                        onDoubleClick={() => handleEdit(post.id)}
+                        onDoubleClick={() => handleShowInfo(post.id)}
                       >
                         <td className="px-4 py-4">
                           <input
@@ -1226,6 +1350,17 @@ export default function Inspector() {
                         </td>
                         <td className="px-4 py-4 text-sm whitespace-nowrap">
                           <div className="flex space-x-2">
+                            <button
+                              onClick={() => handleShowInfo(post.id)}
+                              className="px-2 py-1 bg-gray-100 text-gray-700 rounded hover:bg-gray-200 transition-colors"
+                              aria-label="Show information"
+                            >
+                              <span className="flex items-center justify-center rounded-full w-5 h-5">
+                                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                                </svg>
+                              </span>
+                            </button>
                             <button
                               onClick={() => handleEdit(post.id)}
                               className="px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors"
@@ -1298,6 +1433,107 @@ export default function Inspector() {
                 </div>
               )}
               
+              {/* Info modal */}
+              {isInfoModalOpen && currentInfoPost && (
+                <div className="fixed inset-0 bg-gray-600 bg-opacity-50 dark:bg-black dark:bg-opacity-70 flex items-center justify-center z-50">
+                  <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-xl max-w-2xl w-full">
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-lg font-medium dark:text-white">Content Information</h3>
+                      <button 
+                        onClick={() => setIsInfoModalOpen(false)}
+                        className="text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-6 h-6">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                        </svg>
+                      </button>
+                    </div>
+                    
+                    <div className="space-y-4 mb-6 max-h-[70vh] overflow-y-auto">
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Title</h4>
+                        <p className="text-gray-900 dark:text-white">{currentInfoPost.title}</p>
+                      </div>
+                      
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">URL</h4>
+                        <a 
+                          href={currentInfoPost.url} 
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-300"
+                        >
+                          {currentInfoPost.url}
+                        </a>
+                      </div>
+                      
+                      <div>
+                        <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Description</h4>
+                        <p className="text-gray-900 dark:text-white">{currentInfoPost.description}</p>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Format</h4>
+                          <p className="text-gray-900 dark:text-white capitalize">{currentInfoPost.format}</p>
+                        </div>
+                        
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Platform</h4>
+                          <p className="text-gray-900 dark:text-white capitalize">{currentInfoPost.platform}</p>
+                        </div>
+                        
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Status</h4>
+                          <p className="text-gray-900 dark:text-white">
+                            <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium
+                              ${currentInfoPost.status === 'POSTED' ? 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' : 
+                                currentInfoPost.status === 'SCHEDULED' ? 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' : 
+                                'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200'}`}>
+                              {currentInfoPost.status}
+                            </span>
+                          </p>
+                        </div>
+                        
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">Posted Date</h4>
+                          <p className="text-gray-900 dark:text-white">{formatDate(currentInfoPost.posted_date)}</p>
+                        </div>
+                      </div>
+                      
+                      {currentInfoPost.seo_score && (
+                        <div>
+                          <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400">SEO Score</h4>
+                          <p className="text-gray-900 dark:text-white">{JSON.stringify(currentInfoPost.seo_score, null, 2)}</p>
+                        </div>
+                      )}
+                      
+                      {currentInfoPost.seo_info && (
+                        <div className="border-t border-gray-200 dark:border-gray-700 pt-4 mt-4">
+                          <h4 className="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">SEO Information</h4>
+                          <div className="bg-gray-50 dark:bg-gray-800 p-3 rounded overflow-auto max-h-72">
+                            {formatSeoInfo(
+                              typeof currentInfoPost.seo_info === 'string' 
+                                ? JSON.parse(currentInfoPost.seo_info) 
+                                : currentInfoPost.seo_info
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    
+                    <div className="flex justify-end">
+                      <button
+                        onClick={() => setIsInfoModalOpen(false)}
+                        className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Edit modal */}
               {isEditModalOpen && editingPost && (
                 <div className="fixed inset-0 bg-gray-600 bg-opacity-50 dark:bg-black dark:bg-opacity-70 flex items-center justify-center z-50">
@@ -1386,23 +1622,23 @@ export default function Inspector() {
                             <option value="youtube">YouTube</option>
                           </select>
                         </div>
-                      </div>
                       
-                      <div>
-                        <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                          Status
-                        </label>
-                        <select
-                          id="status"
-                          name="status"
-                          value={editingPost.status}
-                          onChange={handleInputChange}
-                          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
-                        >
-                          <option value="POSTED">Posted</option>
-                          <option value="SCHEDULED">Scheduled</option>
-                          <option value="SUGGESTED">Suggested</option>
-                        </select>
+                        <div>
+                          <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            Status
+                          </label>
+                          <select
+                            id="status"
+                            name="status"
+                            value={editingPost.status}
+                            onChange={handleInputChange}
+                            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
+                          >
+                            <option value="POSTED">Posted</option>
+                            <option value="SCHEDULED">Scheduled</option>
+                            <option value="SUGGESTED">Suggested</option>
+                          </select>
+                        </div>
                       </div>
                     </div>
                     
