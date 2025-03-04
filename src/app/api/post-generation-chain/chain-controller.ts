@@ -147,6 +147,10 @@ export async function executePostGenerationChain(
     
     // Validate organization
     console.log('Validating organization:', params.organizationId);
+    
+    // Extract custom prompts from organization preferences to reuse across steps
+    let orgCustomPrompts = {};
+    
     try {
       const { data: orgData, error: orgError } = await supabase
         .from('organizations')
@@ -185,13 +189,18 @@ export async function executePostGenerationChain(
       console.log('Starting post idea generation');
       let postIdeas: PostIdea[] = [];
       try {
+        orgCustomPrompts = orgData.preferences?.customPrompts || {};
+        
         postIdeas = await generatePostIdeasStep(
           params.platformSettings, 
           orgData.preferences?.industry || 'technology',
           orgData.preferences?.contentTone || 'professional',
-          params.customPrompt, 
+          params.customPrompt,
           recentPosts || [],
-          orgData.info || {} // Pass the organization info for intent-based generation
+          {
+            ...orgData.info || {},
+            customPrompts: orgCustomPrompts // Pass custom prompts to generatePostIdeasStep
+          }
         );
         
         if (!postIdeas || postIdeas.length === 0) {
@@ -217,7 +226,10 @@ export async function executePostGenerationChain(
         elaboratedPosts = await elaboratePostsStep(
           postIdeas, 
           orgData.preferences?.contentTone || 'professional',
-          orgData.info || {} // Pass the organization info for intent-based elaboration
+          {
+            ...orgData.info || {},
+            customPrompts: orgCustomPrompts // Pass custom prompts to elaboratePostsStep
+          }
         );
         
         if (!elaboratedPosts || elaboratedPosts.length === 0) {
@@ -256,7 +268,10 @@ export async function executePostGenerationChain(
       try {
         postsWithSeo = await generateSeoInfoStep(
           elaboratedPosts,
-          orgData.info || {} // Pass the organization info for intent-based SEO
+          {
+            ...orgData.info || {},
+            customPrompts: orgCustomPrompts // Pass custom prompts to generateSeoInfoStep
+          }
         );
         console.log(`Added SEO info to ${postsWithSeo.length} posts`);
         chainState.partialResults.postsWithSeo = postsWithSeo;

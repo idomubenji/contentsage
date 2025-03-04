@@ -98,9 +98,18 @@ export async function generatePostIdeasStep(
   }
 
   // Content focus description
-  const contentFocusDescription = customPrompt
+  let contentFocusDescription = customPrompt
     ? `Content Focus: ${customPrompt}`
     : "No specific content focus provided.";
+
+  // Add organization's custom prompts if available
+  if (organizationInfo?.customPrompts && Object.keys(organizationInfo.customPrompts).length > 0) {
+    const customPromptsText = Object.entries(organizationInfo.customPrompts)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join('\n');
+    
+    contentFocusDescription += `\n\nOrganization Custom Prompts to follow: \n${customPromptsText}\n\nYou MUST apply these custom prompt requirements to ALL generated content.`;
+  }
 
   // Recent posts context
   let recentPostsContext = "";
@@ -219,6 +228,14 @@ export async function elaboratePostsStep(
   const orgStrategy = organizationInfo?.strategy || '';
   const orgVoice = organizationInfo?.voice || '';
   
+  // Extract custom prompts if available
+  let customPromptsText = '';
+  if (organizationInfo?.customPrompts && Object.keys(organizationInfo.customPrompts).length > 0) {
+    customPromptsText = Object.entries(organizationInfo.customPrompts)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join('\n');
+  }
+  
   // Process posts in batches
   for (let i = 0; i < postIdeas.length; i += batchSize) {
     const batch = postIdeas.slice(i, i + batchSize);
@@ -238,6 +255,8 @@ export async function elaboratePostsStep(
           ${orgVoice ? `Brand Voice: ${orgVoice}` : ''}
           
           Ensure the content aligns with the organization's intent, strategy, and brand voice.
+          
+          ${customPromptsText ? `CUSTOM PROMPTS TO FOLLOW:\n${customPromptsText}\n\nYou MUST apply these custom prompt requirements to the content.` : ''}
           `;
         }
         
@@ -354,6 +373,14 @@ export async function generateSeoInfoStep(
   const orgKeywords = organizationInfo?.keywords || [];
   const orgSeoStrategy = organizationInfo?.seoStrategy || '';
   
+  // Extract custom prompts if available
+  let customPromptsText = '';
+  if (organizationInfo?.customPrompts && Object.keys(organizationInfo.customPrompts).length > 0) {
+    customPromptsText = Object.entries(organizationInfo.customPrompts)
+      .map(([key, value]) => `${key}: ${value}`)
+      .join('\n');
+  }
+  
   for (const post of elaboratedPosts) {
     try {
       // Skip SEO analysis for non-Web posts
@@ -377,6 +404,8 @@ export async function generateSeoInfoStep(
         ${orgSeoStrategy ? `SEO Strategy: ${orgSeoStrategy}` : ''}
         
         Ensure SEO analysis considers the organization's target keywords and SEO strategy.
+        
+        ${customPromptsText ? `CUSTOM PROMPTS TO FOLLOW:\n${customPromptsText}\n\nYou MUST apply these custom prompt requirements when suggesting SEO improvements.` : ''}
         `;
       }
       
