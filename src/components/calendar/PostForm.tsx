@@ -170,7 +170,7 @@ export default function PostForm({ date, post, onClose }: PostFormProps) {
   };
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-6 max-w-xl w-full max-h-[90vh] overflow-y-auto">
       {/* Header */}
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
@@ -252,6 +252,36 @@ export default function PostForm({ date, post, onClose }: PostFormProps) {
               <p className="text-gray-600 dark:text-gray-400 whitespace-pre-line">
                 {post.description}
               </p>
+            </div>
+          )}
+          
+          {/* SEO Information Display */}
+          {post?.seo_info && (
+            <div className="mt-4 bg-gray-50 dark:bg-gray-700 p-3 rounded-md border border-gray-200 dark:border-gray-600">
+              <h3 className="text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">SEO Information:</h3>
+              
+              {/* Display reasonsData if available */}
+              {post.seo_info.reasonsData?.reasons && post.seo_info.reasonsData.reasons.length > 0 ? (
+                <>
+                  <ul className="text-sm text-gray-600 dark:text-gray-300 space-y-1 list-disc list-inside">
+                    {post.seo_info.reasonsData.reasons.map((reason: string, idx: number) => (
+                      <li key={idx} className="pl-1">{reason}</li>
+                    ))}
+                  </ul>
+                  {post.seo_info.reasonsData.aiConfidence !== undefined && (
+                    <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                      AI Confidence: {(post.seo_info.reasonsData.aiConfidence * 100).toFixed(0)}%
+                    </div>
+                  )}
+                </>
+              ) : (
+                // Display raw seo_info if reasonsData is not properly structured
+                <pre className="text-sm text-gray-600 dark:text-gray-300 whitespace-pre-wrap overflow-auto max-h-40">
+                  {typeof post.seo_info === 'string' 
+                    ? post.seo_info 
+                    : JSON.stringify(post.seo_info, null, 2)}
+                </pre>
+              )}
             </div>
           )}
           

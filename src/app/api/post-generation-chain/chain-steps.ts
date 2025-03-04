@@ -93,7 +93,7 @@ export async function generatePostIdeasStep(
     - Key focus areas: ${organizationInfo.interests?.join(", ") || "Not specified"}
     - Target audience: ${organizationInfo.targetAudience || "Not specified"}
     
-    IMPORTANT: If there appears to be any inconsistency between the Content Focus below and the organization information above, PRIORITIZE the Content Focus. Otherwise, use both to inform your suggestions harmoniously. Furthermore, Unless otherwise specified, Content Focus should only be applied to 2-4 posts. Any more is overkill. User can override this instruction by specifying a number of posts. If the user specifies a specific time, you should also honor that.
+    IMPORTANT: If there appears to be any inconsistency between the Content Focus below and the organization information above, PRIORITIZE the Content Focus. Otherwise, use both to inform your suggestions harmoniously. Furthermore, Unless otherwise specified, Content Focus should only be applied to 3 posts. Any more is overkill. User can only override this instruction by specifying a number of posts. If the user specifies a specific time, you should also honor that.
     `;
   }
 

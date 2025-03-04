@@ -15,6 +15,29 @@ export async function POST(request: NextRequest) {
     console.log('==== POST API DEBUGGING ====');
     console.log(`Request received for /api/posts/suggested with ${suggestions?.length || 0} suggestions`);
     
+    // Add verbose debugging for first suggestion to see what SEO data is coming in
+    if (suggestions && suggestions.length > 0) {
+      const firstSuggestion = suggestions[0];
+      console.log('DEBUG - First suggestion data:', {
+        title: firstSuggestion.title,
+        platform: firstSuggestion.platform,
+        hasSeoInfo: !!firstSuggestion.seo_info,
+        hasReasonsData: !!firstSuggestion.reasonsData,
+        reasonsDataStructure: firstSuggestion.reasonsData ? 
+          JSON.stringify(firstSuggestion.reasonsData) : 'undefined',
+        seoInfoStructure: firstSuggestion.seo_info ? 
+          JSON.stringify(firstSuggestion.seo_info) : 'undefined'
+      });
+
+      // If we have both seo_info and reasonsData, log that unusual case
+      if (firstSuggestion.seo_info && firstSuggestion.reasonsData) {
+        console.log('DEBUG - UNUSUAL: Both seo_info and reasonsData exist on suggestion:', {
+          seoInfoReasons: firstSuggestion.seo_info.reasonsData?.reasons,
+          directReasons: firstSuggestion.reasonsData?.reasons
+        });
+      }
+    }
+    
     // Check for a forced user ID in the URL (for testing)
     const url = new URL(request.url);
     const forcedUserId = url.searchParams.get('userId');
@@ -201,13 +224,21 @@ export async function POST(request: NextRequest) {
       // Generate a temp URL if needed
       const tempUrl = suggestion.url || generateTempUrl(suggestion.title || 'untitled');
       
-      // Ensure reasonsData is properly structured
-      let reasonsData = suggestion.reasonsData;
-      if (!reasonsData || !reasonsData.reasons) {
-        reasonsData = {
+      // Preserve the original seo_info if it exists, otherwise create a default
+      const seo_info = suggestion.seo_info || { 
+        reasonsData: suggestion.reasonsData || {
           reasons: ['Generated based on your content plan'],
           aiConfidence: 0.8
-        };
+        }
+      };
+      
+      // Debug log the final processed seo_info before database save
+      if (suggestion.title === suggestions[0]?.title) {
+        console.log('DEBUG - Processed first suggestion seo_info:', {
+          inputHasSeoInfo: !!suggestion.seo_info,
+          inputHasReasonsData: !!suggestion.reasonsData,
+          finalSeoInfo: JSON.stringify(seo_info)
+        });
       }
       
       return {
@@ -220,7 +251,7 @@ export async function POST(request: NextRequest) {
         organization_id: finalOrgId,
         status: 'SUGGESTED',
         posted_date: suggestion.date || suggestion.posted_date || new Date().toISOString(),
-        seo_info: { reasonsData } // Make sure reasonsData is nested under seo_info
+        seo_info // Use the preserved or default seo_info
       };
     });
     

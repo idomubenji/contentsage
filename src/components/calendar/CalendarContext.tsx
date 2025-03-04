@@ -23,6 +23,12 @@ export interface Post {
   hasInfographic?: boolean;
   hasPodcast?: boolean;
   derivedFrom?: string; // For social posts derived from web content
+  seo_info?: {
+    reasonsData: {
+      reasons: string[];
+      aiConfidence: number;
+    }
+  };
 }
 
 interface CalendarContextType {

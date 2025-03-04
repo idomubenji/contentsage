@@ -379,6 +379,16 @@ function transformToFinalPost(
   post: ScheduledPost, 
   organizationId: string
 ): FinalPost {
+  // Add debug logging for the incoming post
+  console.log('DEBUG - transformToFinalPost INPUT:', {
+    id: post.id,
+    title: post.title,
+    hasReasons: !!post.reasonsData?.reasons,
+    reasonsCount: post.reasonsData?.reasons?.length || 0,
+    reasonsData: post.reasonsData,
+    aiConfidence: post.reasonsData?.aiConfidence
+  });
+  
   // Extract scheduled time if present in the description
   let scheduledTime: string | undefined;
   let cleanDescription = post.description || '';
@@ -398,7 +408,7 @@ function transformToFinalPost(
       post.concept;
   }
   
-  // Add time information to a structured metadata object
+  // Create metadata object
   const metadata = {
     scheduledTime: scheduledTime || '12:00', // Default to noon if no time specified
     seoReasons: post.reasonsData?.reasons || [],
@@ -406,15 +416,29 @@ function transformToFinalPost(
     // Add other metadata as needed
   };
   
-  // Convert metadata to string for storage in description field
-  // This keeps the time information even if the database doesn't have a dedicated field
-  const metadataStr = JSON.stringify(metadata);
+  // Format the final description without metadata comment
+  const finalDescription = cleanDescription.trim();
   
-  // Format the final description with metadata
-  // Using a pattern that can be recognized and parsed later
-  const finalDescription = `${cleanDescription}\n\n<!-- METADATA: ${metadataStr} -->`;
+  // Use the original reasonsData and add the scheduled time and confidence as additional reasons
+  const seoInfo = {
+    reasonsData: {
+      reasons: [
+        ...(post.reasonsData?.reasons || []),
+        `Scheduled Time: ${metadata.scheduledTime}`,
+        `SEO Confidence: ${(metadata.seoConfidence * 100).toFixed(0)}%`,
+      ],
+      aiConfidence: post.reasonsData?.aiConfidence || 0.5
+    }
+  };
   
-  return {
+  // Debug log the created seo_info object
+  console.log('DEBUG - transformToFinalPost seoInfo:', {
+    reasonsCount: seoInfo.reasonsData.reasons.length,
+    reasons: seoInfo.reasonsData.reasons,
+    aiConfidence: seoInfo.reasonsData.aiConfidence
+  });
+  
+  const finalPost = {
     title: post.title,
     description: finalDescription,
     platform: post.platform,
@@ -424,11 +448,19 @@ function transformToFinalPost(
     organization_id: organizationId,
     status: post.status || 'SUGGESTED',
     posted_date: post.posted_date,
-    seo_info: { 
-      reasonsData: post.reasonsData 
-    },
+    seo_info: seoInfo,
     derivedFrom: post.derivedFrom
   };
+  
+  // Debug log the final post object
+  console.log('DEBUG - transformToFinalPost OUTPUT:', {
+    title: finalPost.title,
+    platform: finalPost.platform,
+    hasSeoInfo: !!finalPost.seo_info,
+    seoReasonCount: finalPost.seo_info?.reasonsData?.reasons?.length || 0
+  });
+  
+  return finalPost;
 }
 
 function schedulePostsForPlatform(
