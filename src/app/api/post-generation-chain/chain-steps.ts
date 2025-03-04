@@ -465,12 +465,14 @@ export async function generateSeoInfoStep(
 export async function schedulePostsStep(
   posts: PostWithSeo[],
   timeFrame: CalendarViewType,
-  currentDate: Date
+  currentDate: Date,
+  existingPosts: PostWithSeo[] = []
 ): Promise<ScheduledPost[]> {
   console.log("SCHEDULING DEBUG - Input currentDate:", currentDate);
   console.log("SCHEDULING DEBUG - Input currentDate type:", typeof currentDate);
   console.log("SCHEDULING DEBUG - Input currentDate ISO:", currentDate.toISOString());
   console.log("SCHEDULING DEBUG - Posts count:", posts.length);
+  console.log("SCHEDULING DEBUG - Existing posts count:", existingPosts.length);
   
   try {
     // Ensure currentDate is properly handled
@@ -492,7 +494,7 @@ export async function schedulePostsStep(
     // Force the date to noon UTC to avoid timezone issues
     safeCurrentDate.setUTCHours(12, 0, 0, 0);
     
-    const result = schedulePostsEvenly(posts, timeFrame, safeCurrentDate);
+    const result = schedulePostsEvenly(posts, timeFrame, safeCurrentDate, existingPosts);
     console.log("SCHEDULING DEBUG - Successfully scheduled posts:", result.length);
     
     if (result.length > 0) {
@@ -517,7 +519,7 @@ function fallbackScheduling(
 ): ScheduledPost[] {
   console.log("USING FALLBACK SCHEDULING");
   
-  // Simple scheduling logic that just spaces posts evenly
+  // Simple scheduling logic that respects platform constraints
   const result: ScheduledPost[] = [];
   const safeDate = new Date(currentDate);
   
@@ -529,30 +531,71 @@ function fallbackScheduling(
   // Determine number of days to distribute posts over
   const daysToDistribute = timeFrame === "month" ? 28 : (timeFrame === "week" ? 7 : 14);
   
-  // Distribute posts evenly
-  for (let i = 0; i < posts.length; i++) {
-    const dayOffset = Math.floor((i / posts.length) * daysToDistribute);
-    const postDate = new Date(safeDate);
-    postDate.setDate(postDate.getDate() + dayOffset);
-    
-    // Set a reasonable time (between 9AM and 5PM)
-    postDate.setHours(9 + (i % 8), 0, 0, 0);
-    
-    result.push({
-      ...posts[i], // Preserve ALL properties, including title
-      posted_date: postDate.toISOString(), // Convert Date to string
-      status: 'SCHEDULED' // Add default status
-    });
+  // Group posts by platform
+  const groupedPosts: Record<string, PostWithSeo[]> = {};
+  
+  for (const post of posts) {
+    if (!groupedPosts[post.platform]) {
+      groupedPosts[post.platform] = [];
+    }
+    groupedPosts[post.platform].push(post);
   }
   
-  // Sort by date (first convert strings back to Date objects for comparison)
+  // Schedule posts for each platform
+  Object.keys(groupedPosts).forEach(platform => {
+    const platformPosts = groupedPosts[platform];
+    const { validDays, validHours } = getPlatformSchedulingConstraints(platform);
+    
+    // Find valid days within the time frame
+    const validDates: Date[] = [];
+    const currentDay = new Date(safeDate);
+    const endDate = new Date(safeDate);
+    endDate.setDate(endDate.getDate() + daysToDistribute - 1);
+    
+    while (currentDay <= endDate) {
+      if (validDays.includes(currentDay.getDay())) {
+        validDates.push(new Date(currentDay));
+      }
+      currentDay.setDate(currentDay.getDate() + 1);
+    }
+    
+    // If no valid dates found, use all days as fallback
+    if (validDates.length === 0) {
+      const currentDay = new Date(safeDate);
+      while (currentDay <= endDate) {
+        validDates.push(new Date(currentDay));
+        currentDay.setDate(currentDay.getDate() + 1);
+      }
+    }
+    
+    // Schedule each post
+    for (let i = 0; i < platformPosts.length; i++) {
+      // Distribute posts evenly across valid dates
+      const dateIndex = i % validDates.length;
+      const postDate = new Date(validDates[dateIndex]);
+      
+      // Set time within valid hours for the platform
+      const hour = validHours.start + Math.floor(Math.random() * (validHours.end - validHours.start));
+      const minute = Math.floor(Math.random() * 60);
+      postDate.setHours(hour, minute, 0, 0);
+      
+      result.push({
+        ...platformPosts[i],
+        posted_date: postDate.toISOString(),
+        status: 'SCHEDULED'
+      });
+    }
+  });
+  
+  // Sort by date
   return result.sort((a, b) => new Date(a.posted_date).getTime() - new Date(b.posted_date).getTime());
 }
 
 export function schedulePostsEvenly(
   posts: PostWithSeo[],
   timeFrame: CalendarViewType,
-  currentDate: Date
+  currentDate: Date,
+  existingPosts: PostWithSeo[] = []
 ): ScheduledPost[] {
   console.log("SCHEDULING EVENLY - Start date:", currentDate.toISOString());
   console.log("DEBUG - Posts to schedule:", posts.map(p => ({
@@ -577,69 +620,87 @@ export function schedulePostsEvenly(
     count: groupedPosts[platform].length
   })));
   
-  // Platform scheduling configurations
-  const platformDays: Record<string, number[]> = {
-    Web: [0], // Sunday
-    LinkedIn: [1, 3], // Monday, Wednesday
-    Facebook: [2, 4], // Tuesday, Thursday
-    Instagram: [1, 5], // Monday, Friday
-    X: [2, 3], // Tuesday, Wednesday
-  };
+  // Get constraints for each platform directly from getPlatformSchedulingConstraints
+  const platformConstraints: Record<string, {
+    validDays: number[],
+    validHours: { start: number, end: number }
+  }> = {};
+  
+  Object.keys(groupedPosts).forEach(platform => {
+    platformConstraints[platform] = getPlatformSchedulingConstraints(platform);
+  });
   
   // Start and end dates for the planning period
   let startDate = new Date(currentDate);
-  const endDate = new Date(startDate);
-  
-  // Fix the dates for the time frame
-  if (timeFrame === "month") {
-    // Set to first day of the month
-    startDate = new Date(startDate.getFullYear(), startDate.getMonth(), 1);
-    // Set to last day of the month
-    endDate.setFullYear(startDate.getFullYear(), startDate.getMonth() + 1, 0);
-  } else if (timeFrame === "week") {
-    endDate.setDate(startDate.getDate() + 6); // 7 days
-  } else {
-    endDate.setDate(startDate.getDate() + 13); // 14 days
-  }
+  let endDate = getEndDateForTimeFrame(startDate, timeFrame);
   
   console.log(`SCHEDULING EVENLY - Planning from ${startDate.toISOString()} to ${endDate.toISOString()}`);
   
   const scheduledPosts: ScheduledPost[] = [];
   const usedPosts = new Set<string>(); // Track which posts have been scheduled to avoid duplicates
   
-  // For each platform, find valid dates and schedule posts
+  // Group existing posts by platform and week
+  const existingPostsByPlatformAndWeek: Record<string, Record<number, PostWithSeo[]>> = {};
+  
+  // Process existing posts if available
+  if (existingPosts && existingPosts.length > 0) {
+    console.log(`Processing ${existingPosts.length} existing posts for scheduling consideration`);
+    
+    for (const existingPost of existingPosts) {
+      const platform = existingPost.platform;
+      // Use type assertion to access posted_date, with a fallback
+      const postDate = new Date((existingPost as any).posted_date || currentDate);
+      const weekNumber = getWeekNumberInTimeFrame(postDate, startDate);
+      
+      if (!existingPostsByPlatformAndWeek[platform]) {
+        existingPostsByPlatformAndWeek[platform] = {};
+      }
+      
+      if (!existingPostsByPlatformAndWeek[platform][weekNumber]) {
+        existingPostsByPlatformAndWeek[platform][weekNumber] = [];
+      }
+      
+      existingPostsByPlatformAndWeek[platform][weekNumber].push(existingPost);
+    }
+  }
+  
+  // Divide the time frame into weeks
+  const weeks = groupDaysByWeek(startDate, endDate);
+  const totalWeeks = weeks.length;
+  console.log(`Time frame divided into ${totalWeeks} weeks`);
+  
+  // For each platform, schedule posts
   Object.keys(groupedPosts).forEach(platform => {
     const platformType = platform as string;
     const platformPosts = groupedPosts[platform];
+    const { validDays, validHours } = platformConstraints[platform];
+    
     console.log(`Platform ${platform} has ${platformPosts.length} posts to schedule`);
+    console.log(`Valid days for ${platform}: ${validDays.join(', ')}`);
     
-    // Get valid days for this platform
-    const validDays = platformDays[platformType] || [0, 1, 2, 3, 4, 5, 6]; // Default to all days
+    // Track which weeks already have posts for this platform
+    const postsPerWeek: Record<number, number> = {};
+    const daysWithPostsInWeek: Record<number, Set<number>> = {};
     
-    // Find all valid dates in the range
-    const validDates: Date[] = [];
-    const currentDay = new Date(startDate);
-    
-    while (currentDay <= endDate) {
-      if (validDays.includes(currentDay.getDay())) {
-        validDates.push(new Date(currentDay));
-      }
-      currentDay.setDate(currentDay.getDate() + 1);
-    }
-    
-    console.log(`Platform ${platform} has ${validDates.length} valid dates in range`);
-    
-    if (validDates.length === 0) {
-      console.log(`WARNING: No valid dates for platform ${platform} - using all days instead`);
-      // Fallback: use all days if no valid dates
-      const currentDay = new Date(startDate);
-      while (currentDay <= endDate) {
-        validDates.push(new Date(currentDay));
-        currentDay.setDate(currentDay.getDate() + 1);
+    // Initialize tracking arrays
+    for (let i = 0; i < totalWeeks; i++) {
+      postsPerWeek[i] = 0;
+      daysWithPostsInWeek[i] = new Set<number>();
+      
+      // Account for existing posts
+      if (existingPostsByPlatformAndWeek[platform] && 
+          existingPostsByPlatformAndWeek[platform][i]) {
+        postsPerWeek[i] = existingPostsByPlatformAndWeek[platform][i].length;
+        
+        for (const existingPost of existingPostsByPlatformAndWeek[platform][i]) {
+          // Use type assertion to access posted_date
+          const existingDate = new Date((existingPost as any).posted_date || currentDate);
+          daysWithPostsInWeek[i].add(existingDate.getDay());
+        }
       }
     }
     
-    // Process each post exactly once
+    // Process each post
     for (let i = 0; i < platformPosts.length; i++) {
       const post = platformPosts[i];
       
@@ -653,26 +714,106 @@ export function schedulePostsEvenly(
       // Mark this post as used
       usedPosts.add(postId);
       
-      // Calculate which date to use - distribute evenly across available dates
-      const dateIndex = i % validDates.length;
-      const postDate = new Date(validDates[dateIndex]);
+      // Find the earliest week that doesn't have a post for this platform yet
+      let targetWeek = -1;
+      for (let weekIndex = 0; weekIndex < totalWeeks; weekIndex++) {
+        if (postsPerWeek[weekIndex] === 0) {
+          targetWeek = weekIndex;
+          break;
+        }
+      }
       
-      // Set a time between 9 AM and 5 PM
-      postDate.setHours(9 + Math.floor(Math.random() * 8), Math.floor(Math.random() * 60), 0, 0);
+      // If all weeks have at least one post, find the week with the fewest posts
+      if (targetWeek === -1) {
+        let minPosts = Infinity;
+        for (let weekIndex = 0; weekIndex < totalWeeks; weekIndex++) {
+          if (postsPerWeek[weekIndex] < minPosts) {
+            minPosts = postsPerWeek[weekIndex];
+            targetWeek = weekIndex;
+          }
+        }
+      }
+      
+      // Determine which day to use within the target week
+      const weekStart = weeks[targetWeek].start;
+      const weekEnd = weeks[targetWeek].end;
+      
+      // Find all valid days in this week that match platform constraints
+      const validDatesInWeek: Date[] = [];
+      const currentDay = new Date(weekStart);
+      
+      while (currentDay <= weekEnd) {
+        const dayOfWeek = getDay(currentDay);
+        if (validDays.includes(dayOfWeek) && !daysWithPostsInWeek[targetWeek].has(dayOfWeek)) {
+          validDatesInWeek.push(new Date(currentDay));
+        }
+        currentDay.setDate(currentDay.getDate() + 1);
+      }
+      
+      let selectedDate: Date;
+      
+      if (validDatesInWeek.length > 0) {
+        // Choose the first available valid date
+        selectedDate = validDatesInWeek[0];
+      } else if (validDays.length > 0) {
+        // If no valid dates are available in this week (all taken), 
+        // choose the next day after the current latest scheduled day
+        const latestDayInWeek = Array.from(daysWithPostsInWeek[targetWeek])
+          .sort((a, b) => a - b)
+          .pop() || validDays[0];
+        
+        // Find the next valid day after the latest day
+        let nextDay = latestDayInWeek + 1;
+        while (!validDays.includes(nextDay % 7)) {
+          nextDay++;
+        }
+        nextDay = nextDay % 7;
+        
+        // Create a date for this day in the target week
+        selectedDate = new Date(weekStart);
+        while (getDay(selectedDate) !== nextDay) {
+          selectedDate.setDate(selectedDate.getDate() + 1);
+          if (selectedDate > weekEnd) {
+            // Wrap around to the beginning of the week if necessary
+            selectedDate = new Date(weekStart);
+          }
+        }
+      } else {
+        // Fallback to any day in the week if no valid days specified
+        selectedDate = new Date(weekStart);
+      }
+      
+      // Set a time based on platform's valid hours
+      const hour = validHours.start + Math.floor(Math.random() * (validHours.end - validHours.start));
+      const minute = Math.floor(Math.random() * 60);
+      selectedDate.setHours(hour, minute, 0, 0);
+      
+      // Update tracking for this week
+      postsPerWeek[targetWeek]++;
+      daysWithPostsInWeek[targetWeek].add(getDay(selectedDate));
       
       // Create scheduled post
       scheduledPosts.push({
         ...post,
-        posted_date: postDate.toISOString(), // Convert Date to string
+        posted_date: selectedDate.toISOString(), // Convert Date to string
         status: 'SCHEDULED' // Add default status
       });
       
-      console.log(`Scheduled "${post.title}" for ${postDate.toISOString()}`);
+      console.log(`Scheduled "${post.title}" for ${selectedDate.toISOString()} (Week ${targetWeek + 1})`);
     }
   });
   
   // Sort by date (first convert strings back to Date objects for comparison)
   return scheduledPosts.sort((a, b) => new Date(a.posted_date).getTime() - new Date(b.posted_date).getTime());
+}
+
+/**
+ * Gets the week number within a time frame
+ */
+function getWeekNumberInTimeFrame(date: Date, startDate: Date): number {
+  const diffTime = date.getTime() - startDate.getTime();
+  const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+  return Math.floor(diffDays / 7);
 }
 
 /**
@@ -693,17 +834,17 @@ function getPlatformSchedulingConstraints(platform: string): {
     case 'twitter':
       return {
         validDays: [1, 2], // Monday and Tuesday
-        validHours: { start: 10, end: 12 } // 10 AM to 12 PM
+        validHours: { start: 10, end: 13 } // 10 AM to 1 PM
       };
     case 'linkedin':
       return {
         validDays: [2, 3, 4], // Tuesday, Wednesday, Thursday
-        validHours: { start: 10, end: 15 } // 10 AM to 3 PM
+        validHours: { start: 10, end: 14 } // 10 AM to 2 PM
       };
     case 'instagram':
       return {
-        validDays: [2, 3], // Tuesday and Wednesday
-        validHours: { start: 10, end: 16 } // 10 AM to 4 PM
+        validDays: [2, 3, 4], // Tuesday, Wednesday, Thursday
+        validHours: { start: 10, end: 14 } // 10 AM to 2 PM
       };
     case 'facebook':
       return {

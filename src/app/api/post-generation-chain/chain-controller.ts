@@ -57,17 +57,17 @@ function getPlatformSchedulingConstraints(platform: Platform): PlatformSchedulin
     case 'x':
       return {
         validDays: [1, 2], // Monday and Tuesday
-        validHours: { start: 10, end: 12 } // 10 AM to 12 PM
+        validHours: { start: 10, end: 13 } // 10 AM to 1 PM
       };
     case 'linkedin':
       return {
         validDays: [2, 3, 4], // Tuesday, Wednesday, Thursday
-        validHours: { start: 10, end: 15 } // 10 AM to 3 PM
+        validHours: { start: 10, end: 14 } // 10 AM to 2 PM
       };
     case 'instagram':
       return {
-        validDays: [2, 3], // Tuesday and Wednesday
-        validHours: { start: 10, end: 16 } // 10 AM to 4 PM
+        validDays: [2, 3, 4], // Tuesday, Wednesday, Thursday
+        validHours: { start: 10, end: 14 } // 10 AM to 2 PM
       };
     default:
       return {
@@ -307,10 +307,56 @@ export async function executePostGenerationChain(
         }
         
         // Execute scheduling with validated date
+        console.log("Attempting to fetch existing scheduled posts for better distribution");
+        const existingPosts: PostWithSeo[] = [];
+        
+        try {
+          // Create Supabase client
+          const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL || '',
+            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || ''
+          );
+          
+          // Fetch existing posts for the organization
+          const { data: existingPostsData, error } = await supabase
+            .from('posts')
+            .select('*')
+            .eq('organization_id', params.organizationId)
+            .eq('status', 'SCHEDULED');
+            
+          if (error) {
+            console.error("Error fetching existing posts:", error);
+          } else if (existingPostsData) {
+            console.log(`Found ${existingPostsData.length} existing scheduled posts`);
+            
+            // Transform the database posts to the PostWithSeo format
+            existingPostsData.forEach((post: any) => {
+              existingPosts.push({
+                id: post.id,
+                title: post.title,
+                platform: post.platform,
+                concept: '',
+                format: post.format || '',
+                elaboration: {},
+                reasonsData: {
+                  reasons: [],
+                  aiConfidence: 0
+                },
+                // Add the posted_date as a custom property that our scheduling will use
+                ...(post.posted_date && { posted_date: post.posted_date })
+              });
+            });
+          }
+        } catch (fetchError) {
+          console.error("Error in existing posts fetch operation:", fetchError);
+        }
+        
+        // Execute scheduling with validated date and existing posts
         scheduledPosts = await schedulePostsStep(
           postsWithSeo, 
           params.timeFrame, 
-          schedulingDate
+          schedulingDate,
+          existingPosts
         );
         console.log(`Scheduled ${scheduledPosts.length} posts starting from date: ${format(schedulingDate, 'yyyy-MM-dd')}`);
         chainState.partialResults.scheduledPosts = scheduledPosts;
