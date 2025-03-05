@@ -121,98 +121,39 @@ export async function POST(request: NextRequest) {
       );
     }
     
-    // Initialize chain progress in the store
-    updateChainProgress(chainId, {
-      isGenerating: true,
-      step: 'initializing',
-      progress: 0,
-      partialResults: {}
-    });
-    
-    // Get user ID from auth header or use admin client
-    let userId = 'system';
-    
-    // Check for auth header
-    const authHeader = request.headers.get('authorization');
-    if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7);
-      const { data, error } = await supabase.auth.getUser(token);
-      
-      if (!error && data.user) {
-        userId = data.user.id;
-      } else {
-        return NextResponse.json(
-          { error: 'Unauthorized' },
-          { status: 401 }
-        );
-      }
-    }
-    
-    // Prepare chain parameters
-    const chainParams: ChainParams = {
+    // Set up the chain parameters
+    const params: ChainParams = {
       timeFrame,
-      currentDate: validatedDate,
+      currentDate,
       platformSettings,
       customPrompt,
       organizationId
     };
-    
-    // Execute the chain with proper error handling
-    try {
-      console.log('Starting chain execution with params:', JSON.stringify({
-        timeFrame,
-        currentDate,
-        platformCount: platformSettings.length,
-        organizationId,
-        hasCustomPrompt: !!customPrompt
-      }));
-      
-      // Execute the chain with progress callback
-      const finalPosts = await executePostGenerationChain(
-        chainParams, 
-        (state) => updateChainProgress(chainId, state)
-      );
-      
-      console.log(`Chain execution successful, generated ${finalPosts.length} posts`);
-      
-      // Store the final posts in the chain state
-      updateChainWithResults(chainId, finalPosts);
-      
-      // Return the chain ID and generated posts
-      return NextResponse.json({ 
-        success: true, 
-        chainId, // Return chain ID for client to fetch updates
-        posts: finalPosts 
-      });
-    } catch (chainError) {
-      console.error('Chain execution error:', chainError);
-      
-      // Update chain state to error
-      updateChainProgress(chainId, {
-        isGenerating: false,
-        step: 'error',
-        progress: 0,
-        error: chainError instanceof Error ? chainError.message : 'Unknown error',
-        partialResults: {}
-      });
-      
-      const errorMessage = chainError instanceof Error 
-        ? chainError.message
-        : 'Failed to generate post ideas';
-        
-      const errorCode = errorMessage.includes('Organization') ? 'ORG_ERROR' : 'GENERATION_ERROR';
-      
-      return NextResponse.json({ 
-        error: errorMessage,
-        code: errorCode,
-        chainId, // Return chain ID for client to fetch error updates
-        details: chainError
-      }, { status: 500 });
-    }
+
+    // Initialize chain state - store it immediately
+    const initialState: ChainState = {
+      isGenerating: true,
+      step: 'initializing',
+      progress: 0,
+      partialResults: {}
+    };
+    updateChainProgress(chainId, initialState);
+
+    // Start the generation process in the background without awaiting
+    // This ensures we don't hit the Vercel function timeout
+    executePostGenerationChainInBackground(params, chainId);
+
+    // Return an immediate response with the chainId
+    return NextResponse.json({ 
+      success: true, 
+      message: 'Post generation started', 
+      chainId 
+    });
+
   } catch (error) {
-    console.error('Error in post generation chain API:', error);
+    console.error('Error in POST handler:', error);
     
-    // Set error state in chain progress if chainId exists
+    // Update chain state to error if we have a chainId
     if (chainId) {
       updateChainProgress(chainId, {
         isGenerating: false,
@@ -223,14 +164,69 @@ export async function POST(request: NextRequest) {
       });
     }
     
-    return NextResponse.json({ 
-      error: error instanceof Error ? 
-        `Failed to process request: ${error.message}` : 
-        'Unknown error during post generation',
-      code: 'API_ERROR',
-      chainId,
-      details: error
-    }, { status: 500 });
+    return NextResponse.json(
+      { 
+        success: false, 
+        message: error instanceof Error ? error.message : 'Unknown error',
+        chainId 
+      }, 
+      { status: 500 }
+    );
+  }
+}
+
+// Background execution function that doesn't block the response
+async function executePostGenerationChainInBackground(params: ChainParams, chainId: string) {
+  try {
+    // Execute the full chain
+    const posts = await executePostGenerationChain(
+      params,
+      (state) => {
+        // Update progress in the store whenever there's a change
+        updateChainProgress(chainId, state);
+      }
+    );
+    
+    // Save the results to our database for persistence
+    if (posts && posts.length > 0) {
+      try {
+        // Insert generated posts with SUGGESTED status for later review
+        const postsToInsert = posts.map(post => ({
+          ...post,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString()
+        }));
+        
+        const { error: insertError } = await supabase
+          .from('posts')
+          .insert(postsToInsert);
+        
+        if (insertError) {
+          console.error('Error inserting posts:', insertError);
+          // Continue despite insert error - we still return the generated posts
+        } else {
+          console.log(`Successfully inserted ${posts.length} posts`);
+        }
+      } catch (dbError) {
+        console.error('Database error:', dbError);
+        // Non-fatal error, continue with result
+      }
+    }
+    
+    // Update the chain with the final results
+    updateChainWithResults(chainId, posts);
+    
+  } catch (error) {
+    console.error('Error in background execution:', error);
+    
+    // Update chain state to error
+    updateChainProgress(chainId, {
+      isGenerating: false,
+      step: 'error',
+      progress: 0,
+      error: error instanceof Error ? error.message : 'Unknown error',
+      partialResults: {}
+    });
   }
 }
 

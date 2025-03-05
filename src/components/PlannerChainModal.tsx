@@ -65,18 +65,19 @@ export default function PlannerChainModal({
   
   // Generate posts using the chain API
   const handleGeneratePlan = async () => {
+    setChainState({
+      isGenerating: true,
+      step: 'initializing',
+      progress: 0
+    });
+    
     try {
-      setChainState({
-        isGenerating: true,
-        step: 'initializing',
-        progress: 0
-      });
-      
-      // Filter out platforms with count = 0
-      const activePlatforms = platformSettings.filter(p => p.count > 0);
+      // Validate inputs
+      const activePlatforms = platformSettings
+        .filter(p => p.count > 0)
+        .map(p => ({ platform: p.platform, count: p.count }));
       
       if (activePlatforms.length === 0) {
-        alert('Please select at least one platform with a post count greater than 0');
         setChainState({
           isGenerating: false,
           step: 'error',
@@ -103,23 +104,19 @@ export default function PlannerChainModal({
       
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Failed to generate posts');
+        throw new Error(errorData.message || 'Failed to generate posts');
       }
       
       const data = await response.json();
       
-      // Update state with generated posts
-      setGeneratedPosts(data.posts || []);
-      
-      // Update chain state
-      setChainState({
-        isGenerating: false,
-        step: 'complete',
-        progress: 100
-      });
-      
+      // Start polling for results using the chainId
+      if (data.chainId) {
+        startResultPolling(data.chainId);
+      } else {
+        throw new Error('No chain ID returned from API');
+      }
     } catch (error) {
-      console.error('Error generating posts:', error);
+      console.error('Error generating plan:', error);
       
       setChainState({
         isGenerating: false,
@@ -128,6 +125,60 @@ export default function PlannerChainModal({
         error: error instanceof Error ? error.message : 'Unknown error'
       });
     }
+  };
+  
+  // Poll for chain results
+  const startResultPolling = (chainId: string) => {
+    // Set up polling interval
+    const pollInterval = setInterval(async () => {
+      try {
+        // Fetch current state from the chain-results endpoint
+        const response = await fetch(`/api/chain-results?chainId=${chainId}`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch chain results');
+        }
+        
+        const data = await response.json();
+        
+        if (data && data.chainState) {
+          // Update local chain state
+          setChainState({
+            isGenerating: data.chainState.isGenerating,
+            step: data.chainState.step,
+            progress: data.chainState.progress,
+            error: data.chainState.error
+          });
+          
+          // If we have final results, update posts and stop polling
+          if (data.chainState.step === 'complete' && 
+              data.chainState.partialResults?.finalPosts) {
+            setGeneratedPosts(data.chainState.partialResults.finalPosts);
+            clearInterval(pollInterval);
+          }
+          
+          // If there's an error, stop polling
+          if (data.chainState.step === 'error') {
+            clearInterval(pollInterval);
+          }
+        }
+      } catch (error) {
+        console.error('Error polling for results:', error);
+        
+        // Stop polling on error
+        clearInterval(pollInterval);
+        
+        setChainState({
+          isGenerating: false,
+          step: 'error',
+          progress: 0,
+          error: error instanceof Error ? error.message : 'Failed to fetch results'
+        });
+      }
+    }, 2000); // Poll every 2 seconds
+    
+    // Clean up interval on component unmount
+    return () => clearInterval(pollInterval);
   };
   
   // Save generated posts to the database
@@ -159,54 +210,6 @@ export default function PlannerChainModal({
       alert('Failed to save posts: ' + (error instanceof Error ? error.message : 'Unknown error'));
     }
   };
-  
-  // Set up SSE for real-time progress updates
-  useEffect(() => {
-    if (!chainState.isGenerating) return;
-    
-    // Create a unique chain ID for this generation
-    const chainId = Date.now().toString();
-    
-    // Connect to SSE endpoint
-    const eventSource = new EventSource(`/api/post-generation-chain?chainId=${chainId}`);
-    
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data);
-        
-        setChainState(prev => ({
-          ...prev,
-          step: data.step || prev.step,
-          progress: data.progress || prev.progress,
-          isGenerating: data.isGenerating !== undefined ? data.isGenerating : prev.isGenerating,
-          error: data.error || prev.error
-        }));
-        
-        // Close connection when complete
-        if (data.step === 'complete' || data.step === 'error') {
-          eventSource.close();
-        }
-      } catch (error) {
-        console.error('Error parsing SSE data:', error);
-      }
-    };
-    
-    eventSource.onerror = () => {
-      console.error('SSE connection error');
-      eventSource.close();
-      
-      setChainState(prev => ({
-        ...prev,
-        isGenerating: false,
-        step: 'error',
-        error: 'Connection to server lost'
-      }));
-    };
-    
-    return () => {
-      eventSource.close();
-    };
-  }, [chainState.isGenerating]);
   
   // Get step label for display
   const getStepLabel = (step: ChainStep): string => {

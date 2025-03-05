@@ -30,53 +30,12 @@ export async function GET(request: NextRequest) {
     
     console.log(`Found chain state for ${chainId}. Step: ${chainState.step}, Progress: ${chainState.progress}, IsGenerating: ${chainState.isGenerating}`);
     
-    // Check if the chain is complete
-    if (chainState.step !== 'complete' && chainState.isGenerating) {
-      console.log(`Chain ${chainId} is still processing.`);
-      return NextResponse.json(
-        { 
-          error: 'Chain processing is not complete',
-          status: chainState.step,
-          progress: chainState.progress
-        },
-        { status: 202 } // Accepted but not complete
-      );
-    }
-    
-    // If there's an error, return it
-    if (chainState.error) {
-      console.error(`Chain ${chainId} ended with error: ${chainState.error}`);
-      return NextResponse.json(
-        { error: chainState.error },
-        { status: 500 }
-      );
-    }
-    
-    // Log the available results
-    console.log(`Chain ${chainId} results:`, {
-      hasFinalPosts: !!chainState.partialResults.finalPosts,
-      hasScheduledPosts: !!chainState.partialResults.scheduledPosts,
-      hasSeoInfo: !!chainState.partialResults.postsWithSeo,
-      hasElaborations: !!chainState.partialResults.elaboratedPosts,
-      hasIdeas: !!chainState.partialResults.postIdeas
-    });
-    
-    // Return any available results
-    const posts = chainState.partialResults.finalPosts || 
-                 chainState.partialResults.scheduledPosts || 
-                 chainState.partialResults.postsWithSeo ||
-                 chainState.partialResults.elaboratedPosts ||
-                 chainState.partialResults.postIdeas || [];
-    
-    const postsCount = Array.isArray(posts) ? posts.length : 0;
-    console.log(`Returning ${postsCount} posts for chain ${chainId}`);
-    
+    // Return the full chain state for client-side processing
+    // This supports our polling mechanism and lets the client decide how to handle different states
     return NextResponse.json({
       success: true,
       chainId,
-      status: chainState.step,
-      progress: chainState.progress,
-      posts
+      chainState
     });
   } catch (error) {
     console.error('Error fetching chain results:', error);
