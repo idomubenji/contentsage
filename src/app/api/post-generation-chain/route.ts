@@ -18,7 +18,9 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 // Function to update the chain state with final posts results
 const updateChainWithResults = (chainId: string, posts: FinalPost[]) => {
   const existingState = getChainProgress(chainId);
+  
   if (existingState) {
+    console.log(`Updating chain ${chainId} with ${posts.length} posts`);
     updateChainProgress(chainId, {
       ...existingState,
       isGenerating: false,
@@ -29,6 +31,8 @@ const updateChainWithResults = (chainId: string, posts: FinalPost[]) => {
         finalPosts: posts
       }
     });
+  } else {
+    console.log(`Cannot update chain ${chainId} with results - state not found`);
   }
 };
 
@@ -177,54 +181,86 @@ export async function POST(request: NextRequest) {
 
 // Background execution function that doesn't block the response
 async function executePostGenerationChainInBackground(params: ChainParams, chainId: string) {
+  console.log(`Starting background execution for chain ${chainId}`);
+  
+  // Use a try/catch to prevent failures from stopping execution
   try {
-    // Execute the full chain
-    const posts = await executePostGenerationChain(
-      params,
-      (state) => {
-        // Update progress in the store whenever there's a change
-        updateChainProgress(chainId, state);
-      }
-    );
-    
-    // Save the results to our database for persistence
-    if (posts && posts.length > 0) {
+    // To improve Vercel serverless compatibility, run this in a non-awaited Promise
+    // This allows the function to detach from the original request lifecycle
+    Promise.resolve().then(async () => {
       try {
-        // Insert generated posts with SUGGESTED status for later review
-        const postsToInsert = posts.map(post => ({
-          ...post,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString()
-        }));
+        // Execute the full chain
+        console.log(`Chain ${chainId}: Executing post generation chain`);
+        const posts = await executePostGenerationChain(
+          params,
+          (state) => {
+            // Update progress in the store whenever there's a change
+            updateChainProgress(chainId, state);
+          }
+        );
         
-        const { error: insertError } = await supabase
-          .from('posts')
-          .insert(postsToInsert);
-        
-        if (insertError) {
-          console.error('Error inserting posts:', insertError);
-          // Continue despite insert error - we still return the generated posts
-        } else {
-          console.log(`Successfully inserted ${posts.length} posts`);
+        // Save the results to our database for persistence
+        if (posts && posts.length > 0) {
+          try {
+            console.log(`Chain ${chainId}: Saving ${posts.length} posts to database`);
+            // Insert generated posts with SUGGESTED status for later review
+            const postsToInsert = posts.map(post => ({
+              ...post,
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            }));
+            
+            const { error: insertError } = await supabase
+              .from('posts')
+              .insert(postsToInsert);
+            
+            if (insertError) {
+              console.error(`Chain ${chainId}: Error inserting posts:`, insertError);
+              // Continue despite insert error - we still return the generated posts
+            } else {
+              console.log(`Chain ${chainId}: Successfully inserted ${posts.length} posts`);
+            }
+          } catch (dbError) {
+            console.error(`Chain ${chainId}: Database error:`, dbError);
+            // Non-fatal error, continue with result
+          }
         }
-      } catch (dbError) {
-        console.error('Database error:', dbError);
-        // Non-fatal error, continue with result
+        
+        // Update the chain with the final results
+        console.log(`Chain ${chainId}: Updating with final results`);
+        updateChainProgress(chainId, {
+          isGenerating: false,
+          step: 'complete',
+          progress: 100,
+          partialResults: { finalPosts: posts }
+        });
+        
+        console.log(`Chain ${chainId}: Background execution completed successfully`);
+      } catch (error) {
+        console.error(`Chain ${chainId}: Error in background execution:`, error);
+        
+        // Update chain state to error
+        updateChainProgress(chainId, {
+          isGenerating: false,
+          step: 'error',
+          progress: 0,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          partialResults: {}
+        });
       }
-    }
+    });
     
-    // Update the chain with the final results
-    updateChainWithResults(chainId, posts);
-    
-  } catch (error) {
-    console.error('Error in background execution:', error);
+    // Log that we've started the process
+    console.log(`Chain ${chainId}: Background process initiated`);
+  } catch (topLevelError) {
+    console.error(`Chain ${chainId}: Fatal error in background execution:`, topLevelError);
     
     // Update chain state to error
     updateChainProgress(chainId, {
       isGenerating: false,
       step: 'error',
       progress: 0,
-      error: error instanceof Error ? error.message : 'Unknown error',
+      error: topLevelError instanceof Error ? topLevelError.message : 'Unknown error',
       partialResults: {}
     });
   }

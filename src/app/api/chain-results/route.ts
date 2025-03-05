@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getChainProgress } from '../post-generation-chain/route';
+import { getChainProgress } from '../post-generation-chain/progress-store';
 
 export async function GET(request: NextRequest) {
   const url = new URL(request.url);
@@ -21,17 +21,23 @@ export async function GET(request: NextRequest) {
     const chainState = getChainProgress(chainId);
     
     if (!chainState) {
-      console.error(`No chain state found for ID: ${chainId}`);
-      return NextResponse.json(
-        { error: `No results found for chain ID ${chainId}` },
-        { status: 404 }
-      );
+      console.log(`No chain state found for ID: ${chainId}, returning default initializing state`);
+      // Return a default state instead of 404 to allow for background processing to catch up
+      return NextResponse.json({
+        success: true,
+        chainId,
+        chainState: {
+          isGenerating: true,
+          step: 'initializing',
+          progress: 0,
+          partialResults: {}
+        }
+      });
     }
     
     console.log(`Found chain state for ${chainId}. Step: ${chainState.step}, Progress: ${chainState.progress}, IsGenerating: ${chainState.isGenerating}`);
     
     // Return the full chain state for client-side processing
-    // This supports our polling mechanism and lets the client decide how to handle different states
     return NextResponse.json({
       success: true,
       chainId,

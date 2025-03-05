@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { format } from 'date-fns';
 import { CalendarViewType, useCalendar } from './CalendarContext';
 import { useAuth } from '../../lib/auth-context';
@@ -91,6 +91,10 @@ export default function PlannerModal({ isOpen, onClose, timeFrame, currentDate }
   // Add state for regeneration
   const [regeneratingPostIndex, setRegeneratingPostIndex] = useState<number | null>(null);
   const [regenerationError, setRegenerationError] = useState<string | null>(null);
+  
+  // Polling mechanism as fallback
+  const [pollingActive, setPollingActive] = useState(false);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
   
   // Helper function for internal logging only
   const logDebug = (message: string) => {
@@ -338,15 +342,18 @@ export default function PlannerModal({ isOpen, onClose, timeFrame, currentDate }
         console.error('SSE connection error:', error);
         logDebug(`SSE connection error: ${(error as any)?.message || 'Unknown error'}`);
         
+        // Fall back to polling if SSE fails
+        if (!pollingActive && chainId) {
+          logDebug('Falling back to polling mechanism after SSE error');
+          startPollingForResults(chainId);
+        }
+        
         // Only handle serious errors (e.g., when the connection fails completely)
         if ((error as any).target?.readyState === EventSource.CLOSED) {
-          setError('Connection to server lost. Please try again.');
-          setChainState({
-            isGenerating: false,
-            step: 'error',
-            progress: 0
-          });
-          eventSource.close();
+          if (!pollingActive && chainId) {
+            logDebug('EventSource closed, starting polling');
+            startPollingForResults(chainId);
+          }
         }
       };
       
@@ -694,6 +701,94 @@ export default function PlannerModal({ isOpen, onClose, timeFrame, currentDate }
       setRegeneratingPostIndex(null);
     }
   };
+  
+  // Polling mechanism as fallback
+  const startPollingForResults = (chainId: string) => {
+    if (pollingActive) return;
+    
+    setPollingActive(true);
+    logDebug('Starting polling mechanism as fallback');
+    
+    const pollInterval = 2000; // Poll every 2 seconds
+    
+    pollingIntervalRef.current = setInterval(async () => {
+      try {
+        const response = await fetch(`/api/chain-results?chainId=${chainId}`);
+        if (!response.ok) {
+          logDebug(`Polling error: ${response.status}`);
+          return;
+        }
+        
+        const data = await response.json();
+        if (!data?.chainState) {
+          logDebug('No chain state in polling response');
+          return;
+        }
+        
+        logDebug(`Polling update: ${data.chainState.step} - ${data.chainState.progress}%`);
+        
+        // Update chain state in UI
+        setChainState(prevState => ({
+          isGenerating: data.chainState.isGenerating !== false,
+          step: data.chainState.step || prevState.step,
+          progress: typeof data.chainState.progress === 'number' ? data.chainState.progress : prevState.progress,
+          error: data.chainState.error
+        }));
+        
+        // Check for posts
+        if (data.chainState.partialResults?.finalPosts?.length > 0) {
+          logDebug(`Received ${data.chainState.partialResults.finalPosts.length} posts from polling`);
+          const processedPosts = data.chainState.partialResults.finalPosts.map((post: PostSuggestion) => ({
+            ...post,
+            description: typeof post.description === 'object' 
+              ? safeStringify(post.description) 
+              : post.description || ''
+          }));
+          
+          setSuggestions(processedPosts);
+        }
+        
+        // Check for completion
+        if (data.chainState.step === 'complete' || data.chainState.progress >= 100 || !data.chainState.isGenerating) {
+          logDebug('Polling detected completion, stopping');
+          stopPolling();
+          
+          setChainState({
+            isGenerating: false,
+            step: 'complete',
+            progress: 100
+          });
+        }
+        
+        // Check for error
+        if (data.chainState.step === 'error' || data.chainState.error) {
+          logDebug(`Polling detected error: ${data.chainState.error || 'Unknown error'}`);
+          stopPolling();
+          setError(data.chainState.error || 'An error occurred during post generation');
+        }
+      } catch (error) {
+        logDebug(`Polling fetch error: ${error}`);
+      }
+    }, pollInterval);
+  };
+
+  const stopPolling = () => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+    setPollingActive(false);
+    logDebug('Polling stopped');
+  };
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
+  }, []);
   
   if (!isOpen) return null;
   
